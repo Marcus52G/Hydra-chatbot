@@ -48,7 +48,7 @@ app.use((req, res, next) => {
 
 const pricesRouter    = require("./routes/prices");
 const ordersRouter    = require("./routes/orders");
-const whatsappRouter  = require("./routes/whatsapp");
+const whatsappRouter  = require("./routes/whatsapp").router;
 
 app.use("/prices",  pricesRouter);
 app.use("/orders",  ordersRouter);
