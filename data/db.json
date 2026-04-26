@@ -1,0 +1,83 @@
+{
+  "prices": {
+    "beef": {
+      "name": "Beef",
+      "price": 600,
+      "unit": "kg",
+      "available": true
+    },
+    "goat": {
+      "name": "Goat",
+      "price": 750,
+      "unit": "kg",
+      "available": false
+    },
+    "chicken": {
+      "name": "Chicken",
+      "price": 500,
+      "unit": "kg",
+      "available": true
+    },
+    "pork": {
+      "name": "Pork",
+      "price": 550,
+      "unit": "kg",
+      "available": true
+    }
+  },
+  "orders": [
+    {
+      "id": "a657cbeb-28b1-43e3-ab19-69857790ce32",
+      "customerName": "John Kamau",
+      "customerPhone": "+254712345678",
+      "items": [
+        {
+          "name": "Beef",
+          "quantity": 2,
+          "unit": "kg",
+          "unitPrice": 600,
+          "lineTotal": 1200
+        }
+      ],
+      "deliveryType": "delivery",
+      "deliveryLocation": "Rongai",
+      "totalPrice": 1200,
+      "status": "pending",
+      "createdAt": "2026-04-23T10:17:42.118Z",
+      "updatedAt": "2026-04-23T10:17:42.118Z"
+    },
+    {
+      "id": "487da4ea-0356-48bd-8415-930a7914f342",
+      "customerName": "John Kamau",
+      "customerPhone": "+254712345678",
+      "items": [
+        {
+          "name": "Beef",
+          "quantity": 2,
+          "unit": "kg",
+          "unitPrice": 600,
+          "lineTotal": 1200
+        }
+      ],
+      "deliveryType": "delivery",
+      "deliveryLocation": "Rongai",
+      "totalPrice": 1200,
+      "status": "pending",
+      "createdAt": "2026-04-23T10:18:49.736Z",
+      "updatedAt": "2026-04-23T10:18:49.736Z"
+    }
+  ],
+  "delivery": {
+    "available": true,
+    "fee_min": 100,
+    "fee_max": 300,
+    "estimated_time": "30-90 minutes"
+  },
+  "business": {
+    "name": "Kilimanjaro Butchery",
+    "phone": "+254726130830",
+    "location": "Along Kangudo Road, Nairobi",
+    "maps_link": "https://maps.google.com/?q=-1.2864,36.8172",
+    "hours": "Mon-Sun: 6am - 9pm"
+  }
+}
