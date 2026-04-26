@@ -140,5 +140,7 @@ async function sendWhatsAppMessage(to, text) {
 
 // Export sendWhatsAppMessage too — other parts of the system
 // (e.g. sending manager notifications) will need it
-module.exports = router;
-module.exports.sendWhatsAppMessage = sendWhatsAppMessage;
+module.exports = {
+  router,
+  sendWhatsAppMessage,
+};
