@@ -48,12 +48,8 @@ app.use((req, res, next) => {
 
 const pricesRouter    = require("./routes/prices");
 const ordersRouter    = require("./routes/orders");
-const whatsappRouter  = require("./routes/whatsapp").router;
-
-app.use("/prices",  pricesRouter);
-app.use("/orders",  ordersRouter);
-// The webhook URL Meta will call: POST https://yourdomain.com/webhook
-app.use("/webhook", whatsappRouter);
+const whatsappRoute = require("./routes/whatsapp");
+app.use("/webhook", whatsappRoute.router);
 
 // ── HEALTH CHECK ───────────────────────────────────────────
 // A health check endpoint is standard practice.
