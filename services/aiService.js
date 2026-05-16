@@ -7,6 +7,7 @@
 //        same system prompt, same JSON output format
 //        messageHandler.js needs NO changes
 // ============================================================
+console.log("🤖 aiService loaded: GEMINI VERSION");
 
 // ── Build system prompt from CLIENT config ─────────────────
 function buildSystemPrompt(client) {
