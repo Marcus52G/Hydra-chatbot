@@ -1,7 +1,7 @@
 {
   "name": "butchery-backend",
   "version": "1.0.0",
-  "description": "Backend API for butchery ordering system",
+  "description": "Backend API for multi-client WhatsApp business bot",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

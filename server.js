@@ -49,7 +49,9 @@ app.use((req, res, next) => {
 const pricesRouter    = require("./routes/prices");
 const ordersRouter    = require("./routes/orders");
 const whatsappRoute = require("./routes/whatsapp");
-app.use("/webhook", whatsappRoute.router);
+app.use("/webhook", whatsappRoute);
+app.use("/prices", pricesRouter);
+app.use("/orders", ordersRouter);
 
 // ── HEALTH CHECK ───────────────────────────────────────────
 // A health check endpoint is standard practice.
@@ -98,7 +100,7 @@ app.use((err, req, res, next) => {
 // The callback runs once the server is ready.
 app.listen(PORT, () => {
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log(`  🥩 Butchery Backend running on port ${PORT}`);
+  console.log(`  Backend running on port ${PORT}`);
   console.log(`  → http://localhost:${PORT}`);
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log("Available endpoints:");

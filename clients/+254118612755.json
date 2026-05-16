@@ -1,0 +1,26 @@
+{
+  "business": {
+    "name":      "Mama Nyama Butchery",
+    "phone":     "+254712345678",
+    "location":  "Tom Mboya Street, Nairobi",
+    "maps_link": "https://maps.google.com/?q=-1.2864,36.8172",
+    "hours":     "Mon-Sat: 6am - 8pm | Sun: 7am - 4pm"
+  },
+  "prices": {
+    "beef":    { "name": "Beef",    "price": 600, "unit": "kg", "available": true  },
+    "goat":    { "name": "Goat",    "price": 750, "unit": "kg", "available": false },
+    "chicken": { "name": "Chicken", "price": 500, "unit": "kg", "available": true  },
+    "pork":    { "name": "Pork",    "price": 550, "unit": "kg", "available": true  }
+  },
+  "delivery": {
+    "available":      true,
+    "fee_min":        100,
+    "fee_max":        300,
+    "estimated_time": "30-90 minutes"
+  },
+  "whatsapp": {
+    "phone_number_id": "1176701305517761",
+    "manager_phone":   "+254794836505"
+  },
+  "orders": []
+}

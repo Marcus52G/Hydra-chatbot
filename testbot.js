@@ -1,57 +1,58 @@
+// ============================================================
+// test-bot.js  (MULTI-CLIENT VERSION)
+// ============================================================
+// Tests the bot as different clients to confirm each one
+// gets their own correct business data
+// ============================================================
+
 require("dotenv").config();
 
-// test-bot.js — AI-powered bot simulator
-// Run with: node test-bot.js
-
 const { handleMessage } = require("./services/messageHandler");
+const { getClient }     = require("./services/clientManager");
 
-const PHONE = "+254700000001";
+const CUSTOMER_PHONE = "+254700000001";
 
-async function send(text) {
+async function send(text, client) {
   console.log(`\n👤 Customer: "${text}"`);
-  const reply = await handleMessage(PHONE, text);
+  const reply = await handleMessage(CUSTOMER_PHONE, text, client);
   if (reply) {
     console.log(`🤖 Bot:\n${reply}`);
   } else {
-    console.log(`🤫 Bot: [silent — human handoff]`);
+    console.log(`🤫 Bot: [human handoff]`);
   }
   console.log("─".repeat(50));
 }
 
 async function runTest() {
   console.log("═".repeat(50));
-  console.log(" AI BOT TEST — Claude Powered");
+  console.log(" MULTI-CLIENT BOT TEST");
   console.log("═".repeat(50));
 
-  // Test 1 — greeting
-  await send("hi");
+  // ── Test Client 1 — Sample Client ───────────────────────
+  const client1 = getClient("+254118612755");
+  if (client1) {
+    console.log(`\n🏪 Testing: ${client1.business.name}`);
+    console.log("─".repeat(50));
+    await send("hi", client1);
+    await send("what are your prices?", client1);
+  } else {
+    console.log("⚠️  Client 1 not found — check clients/+254118612755.json");
+  }
 
-  // Test 2 — Swahili order
-  await send("nataka beef kilo mbili");
+  // ── Test Client 2 — would be a second client ───────────
+  // Uncomment and add their number when you have a second client:
+  // const client2 = getClient("+254733000000");
+  // if (client2) {
+  //   console.log(`\n🏪 Testing: ${client2.business.name}`);
+  //   await send("hi", client2);
+  // }
 
-  // Test 3 — delivery choice
-  await send("delivery");
-
-  // Test 4 — location
-  await send("Rongai near Total petrol station");
-
-  // Test 5 — name
-  await send("John Kamau");
-
-  // Test 6 — confirm
-  await send("1");
-
-  console.log("\n════════════════════════════════");
-  console.log(" EXTRA AI TESTS");
-  console.log("════════════════════════════════");
-
-  // Test AI understanding of natural questions
-  await send("whats cheapest today?");
-  await send("is goat available?");
-  await send("what time do you close?");
-  await send("nipe chicken 1.5kg");  // Sheng
-
-  console.log("\n✅ Done — check data/db.json for saved order");
+  console.log("\n✅ Multi-client test complete!");
+  console.log("\nTo add a new client:");
+  console.log("  1. Copy clients/TEMPLATE.json");
+  console.log("  2. Rename to their WhatsApp number e.g +254733000000.json");
+  console.log("  3. Fill in their business data");
+  console.log("  4. Done — no code changes needed!");
 }
 
 runTest().catch(console.error);

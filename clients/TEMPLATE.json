@@ -1,0 +1,27 @@
+{
+  "business": {
+    "name": "Your Business",
+    "category": "Retail Shop",
+    "phone": "+254700000000",
+    "location": "Your Street, Nairobi",
+    "maps_link": "https://maps.google.com/?q=-1.2921,36.8219",
+    "hours": "Mon-Sat: 8am - 8pm | Sun: 9am - 4pm"
+  },
+  "prices": {
+    "coffee": { "name": "Coffee", "price": 120, "unit": "cup", "available": true },
+    "bread": { "name": "Bread", "price": 80, "unit": "loaf", "available": true },
+    "tshirt": { "name": "T-shirt", "price": 900, "unit": "piece", "available": true },
+    "lotion": { "name": "Lotion", "price": 450, "unit": "bottle", "available": false }
+  },
+  "delivery": {
+    "available":      true,
+    "fee_min":        150,
+    "fee_max":        350,
+    "estimated_time": "45-90 minutes"
+  },
+  "whatsapp": {
+    "phone_number_id": "REPLACE_WITH_CLIENT_PHONE_NUMBER_ID",
+    "manager_phone":   "+254722000000"
+  },
+  "orders": []
+}

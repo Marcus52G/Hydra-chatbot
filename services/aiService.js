@@ -1,51 +1,25 @@
 // ============================================================
-// services/aiService.js
+// services/aiService.js  (GEMINI VERSION)
 // ============================================================
-// PURPOSE: The AI brain of the bot.
-//
-// This file sends the customer's message to Claude API and
-// gets back a structured JSON response telling us:
-//   - What the customer INTENDS to do (intent)
-//   - Any data extracted (item, quantity, name, location)
-//   - A natural human-like reply to send back
-//
-// WHY CLAUDE INSTEAD OF REGEX?
-// Regex: only understands "beef 2kg" exactly
-// Claude: understands ALL of these:
-//   "nataka nyama ya ng'ombe kilo mbili"  (Swahili)
-//   "nipe beef kilo 2"                    (Sheng)
-//   "I want 2kg of beef please"           (English)
-//   "beef"                                (just the word)
-//   "whats cheapest?"                     (question)
-//   "is goat available today?"            (question)
+// WHAT CHANGED:
+//   OLD: uses Claude (Anthropic) API — paid, no free tier
+//   NEW: uses Gemini 2.0 Flash (Google) — free tier available
+//        same system prompt, same JSON output format
+//        messageHandler.js needs NO changes
 // ============================================================
 
-const fs   = require("fs");
-const path = require("path");
+// ── Build system prompt from CLIENT config ─────────────────
+function buildSystemPrompt(client) {
+  const business = client.business;
+  const prices   = client.prices;
+  const delivery = client.delivery;
 
-const DB_PATH = path.join(__dirname, "../data/db.json");
-
-function readDB() {
-  return JSON.parse(fs.readFileSync(DB_PATH, "utf8"));
-}
-
-// ── Build a fresh system prompt from db.json ───────────────
-// This reads the LIVE data every time so if prices change
-// the AI immediately knows the new prices — no code changes needed
-function buildSystemPrompt() {
-  const db = readDB();
-  const business = db.business;
-  const prices   = db.prices;
-  const delivery = db.delivery;
-
-  // Build the menu text from live db.json data
   const menuText = Object.values(prices).map(p => {
+    const unitText = p.unit ? ` / ${p.unit}` : "";
     const status = p.available ? "✅ Available" : "❌ Out of stock";
-    return `  - ${p.name}: KES ${p.price}/kg — ${status}`;
+    return `  - ${p.name}: KES ${p.price}${unitText} — ${status}`;
   }).join("\n");
 
-  // This is the "training" for the AI — it defines who it is
-  // and what it knows about the business
   return `You are a friendly WhatsApp customer service assistant for ${business.name} in Nairobi, Kenya.
 
 BUSINESS INFORMATION:
@@ -65,135 +39,113 @@ DELIVERY INFORMATION:
 
 YOUR PERSONALITY:
 - Friendly, warm, and professional
-- You speak BOTH English and Swahili — reply in the same language the customer uses
+- Speak BOTH English and Swahili — reply in same language customer uses
 - If they mix languages (Sheng), match their energy
-- Keep replies SHORT and clear — this is WhatsApp, not an essay
+- Keep replies SHORT and clear — this is WhatsApp not an essay
 - Use emojis naturally but not excessively
-- You are knowledgeable about meat — you can give cooking tips if asked
 
 YOUR JOB:
 1. Answer questions about prices, availability, location, hours, delivery
 2. Help customers place orders naturally — no rigid format needed
-3. Handle complaints politely and escalate if needed
-4. Upsell naturally: "Beef is great today! Would you like to add Chicken?"
+3. Handle complaints politely
+4. For orders collect: item, quantity, pickup or delivery, name
+5. If delivery: also collect their location
 
 STRICT RULES:
-- NEVER make up prices or availability — only use what is listed above
-- NEVER promise delivery times you are not sure about
-- If a customer asks something you cannot answer, say so and offer the phone number
-- For placing orders, you must collect: item, quantity, pickup or delivery, name
-- If delivery: also collect their location
+- NEVER make up prices — only use what is listed above
+- If customer asks something you cannot answer, give the phone number: ${business.phone}
+- NEVER go off topic — only discuss ${business.name}
 
 RESPONSE FORMAT:
-You must ALWAYS respond with a valid JSON object — nothing else, no extra text.
+ALWAYS respond with a valid JSON object ONLY. No extra text, no markdown, no backticks.
 
-For general conversation / questions:
-{
-  "intent": "general",
-  "reply": "your friendly reply here"
+{"intent":"general","reply":"your reply"}
+{"intent":"order_start","reply":"your reply"}
+{"intent":"order_details","item":"product","quantity":2,"reply":"Got it! Product 2 units = KES 1200. Pickup or delivery?"}
+{"intent":"pickup","reply":"Great! What is your name?"}
+{"intent":"delivery","reply":"Sure! What is your delivery location?"}
+{"intent":"got_location","location":"Rongai near Total","reply":"Got it! What is your name?"}
+{"intent":"got_name","name":"John Kamau","reply":"Perfect! Let me confirm your order..."}
+{"intent":"human","reply":"Connecting you to an attendant!"}
+
+CRITICAL: Return ONLY the JSON object. Nothing before or after it. No markdown, no backticks.`;
 }
 
-For when customer wants to order:
-{
-  "intent": "order_start",
-  "reply": "your reply confirming what you understood and asking next question"
-}
-
-For when you have extracted order details:
-{
-  "intent": "order_details",
-  "item": "beef",
-  "quantity": 2,
-  "reply": "Got it! Beef 2kg = KES 1200. Pickup or delivery?"
-}
-
-For when customer says pickup:
-{
-  "intent": "pickup",
-  "reply": "Great! What is your name?"
-}
-
-For when customer says delivery:
-{
-  "intent": "delivery",
-  "reply": "Sure! What is your delivery location?"
-}
-
-For when you have their location:
-{
-  "intent": "got_location",
-  "location": "Rongai near Total",
-  "reply": "Got it! What is your name?"
-}
-
-For when you have their name:
-{
-  "intent": "got_name",
-  "name": "John Kamau",
-  "reply": "Perfect! Let me confirm your order..."
-}
-
-For escalation to human:
-{
-  "intent": "human",
-  "reply": "Let me connect you to our attendant right away!"
-}
-
-IMPORTANT: Return ONLY the JSON object. No markdown, no backticks, no explanation.`;
-}
-
-// ── askClaude ──────────────────────────────────────────────
-// Sends a message to Claude API and returns parsed JSON
-// conversationHistory = array of previous messages for context
-async function askClaude(customerMessage, conversationHistory = []) {
-  const apiKey = process.env.CLAUDE_API_KEY;
+// ── askGemini ──────────────────────────────────────────────
+async function askGemini(customerMessage, conversationHistory = [], client) {
+  const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    throw new Error("CLAUDE_API_KEY not set in environment variables");
+    throw new Error("GEMINI_API_KEY not set in environment variables");
   }
 
-  // Build messages array — include conversation history for context
-  // This is how Claude remembers what was said earlier in the chat
-  const messages = [
-    ...conversationHistory,
-    { role: "user", content: customerMessage }
+  const systemPrompt = buildSystemPrompt(client);
+
+  // Gemini uses "contents" array with roles "user" and "model"
+  // We inject the system prompt as the first user+model exchange
+  const contents = [
+    {
+      role: "user",
+      parts: [{ text: systemPrompt }],
+    },
+    {
+      role: "model",
+      parts: [{ text: '{"intent":"general","reply":"Understood. I am ready to assist customers."}' }],
+    },
+    // Inject conversation history
+    ...conversationHistory.map(msg => ({
+      role: msg.role === "assistant" ? "model" : "user",
+      parts: [{ text: msg.content }],
+    })),
+    // Current customer message
+    {
+      role: "user",
+      parts: [{ text: customerMessage }],
+    },
   ];
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+  const response = await fetch(url, {
     method: "POST",
     headers: {
-      "Content-Type":            "application/json",
-      "x-api-key":               apiKey,
-      "anthropic-version":       "2023-06-01",
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model:      "claude-haiku-4-5",  // fastest + cheapest model
-      max_tokens: 500,                  // short replies only — this is WhatsApp
-      system:     buildSystemPrompt(), // business data injected here
-      messages,
+      contents,
+      generationConfig: {
+        temperature:     0.3,  // low = more consistent JSON output
+        maxOutputTokens: 500,
+      },
     }),
   });
 
   if (!response.ok) {
     const err = await response.json();
-    throw new Error(`Claude API error: ${err.error?.message}`);
+    throw new Error(`Gemini API error: ${err.error?.message}`);
   }
 
   const data = await response.json();
-  const text = data.content[0].text.trim();
 
-  // Parse the JSON response from Claude
-  // Claude was instructed to return ONLY JSON
+  // Extract text from Gemini response
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+
+  if (!text) {
+    throw new Error("Gemini returned empty response");
+  }
+
+  // Strip markdown backticks if Gemini wraps in ```json ... ```
+  const clean = text.replace(/```json|```/g, "").trim();
+
   try {
-    return JSON.parse(text);
+    return JSON.parse(clean);
   } catch (e) {
-    // If Claude somehow didn't return valid JSON, return a safe fallback
-    console.error("Claude returned non-JSON:", text);
-    return {
-      intent: "general",
-      reply:  text, // use raw text as reply
-    };
+    console.error("Gemini returned non-JSON:", text);
+    return { intent: "general", reply: clean };
   }
 }
 
-module.exports = { askClaude };
+// ── Export as askClaude so messageHandler.js needs no changes
+// messageHandler.js does: const { askClaude } = require("./aiService")
+// We just export askGemini under the same name — zero changes elsewhere
+module.exports = { askClaude: askGemini };
