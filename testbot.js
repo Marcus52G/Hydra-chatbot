@@ -1,16 +1,12 @@
-// ============================================================
-// test-bot.js — Local conversation simulator
-// ============================================================
-// Run this with: node test-bot.js
-// It simulates a full customer conversation WITHOUT needing
-// a real WhatsApp connection. Pure logic test.
-// ============================================================
+require("dotenv").config();
+
+// test-bot.js — AI-powered bot simulator
+// Run with: node test-bot.js
 
 const { handleMessage } = require("./services/messageHandler");
 
-const PHONE = "+254700000001"; // fake test number
+const PHONE = "+254700000001";
 
-// Helper to simulate sending a message and printing the reply
 async function send(text) {
   console.log(`\n👤 Customer: "${text}"`);
   const reply = await handleMessage(PHONE, text);
@@ -22,21 +18,40 @@ async function send(text) {
   console.log("─".repeat(50));
 }
 
-// Run the full happy path: order beef, delivery, confirm
 async function runTest() {
   console.log("═".repeat(50));
-  console.log(" BOT CONVERSATION SIMULATOR");
+  console.log(" AI BOT TEST — Claude Powered");
   console.log("═".repeat(50));
 
-  await send("hi");             // should show main menu
-  await send("3");              // place order
-  await send("beef 2kg");       // order beef
-  await send("2");              // choose delivery
-  await send("Rongai, near Total petrol station");  // location
-  await send("John Kamau");     // name
-  await send("1");              // confirm
+  // Test 1 — greeting
+  await send("hi");
 
-  console.log("\n✅ Test complete — check data/db.json for the saved order");
+  // Test 2 — Swahili order
+  await send("nataka beef kilo mbili");
+
+  // Test 3 — delivery choice
+  await send("delivery");
+
+  // Test 4 — location
+  await send("Rongai near Total petrol station");
+
+  // Test 5 — name
+  await send("John Kamau");
+
+  // Test 6 — confirm
+  await send("1");
+
+  console.log("\n════════════════════════════════");
+  console.log(" EXTRA AI TESTS");
+  console.log("════════════════════════════════");
+
+  // Test AI understanding of natural questions
+  await send("whats cheapest today?");
+  await send("is goat available?");
+  await send("what time do you close?");
+  await send("nipe chicken 1.5kg");  // Sheng
+
+  console.log("\n✅ Done — check data/db.json for saved order");
 }
 
 runTest().catch(console.error);
