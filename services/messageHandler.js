@@ -1,156 +1,306 @@
 // ============================================================
-// services/messageHandler.js  (MULTI-CLIENT VERSION)
+// services/messageHandler.js  (PHASE 2 — M-PESA VERSION)
+// ============================================================
+// WHAT'S NEW:
+//   ✅ After order confirmed → ask for M-Pesa number
+//   ✅ Send STK Push to customer
+//   ✅ Bot tells customer to check phone and enter PIN
+//   ✅ Payment callback handled by routes/mpesa.js
 // ============================================================
 
 const { getSession, setState, resetSession, STATES } = require("./stateManager");
-const { askClaude } = require("./aiService");
-const { v4: uuidv4 } = require("uuid");
+const { askClaude }                                   = require("./aiService");
+const { getCustomer, saveCustomer, addOrderToHistory, buildGreeting } = require("./customerMemory");
+const { sendSTKPush, formatPhone }                    = require("./mpesaService");
+const { v4: uuidv4 }                                  = require("uuid");
+
+function typingDelay(ms = 1200) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 // ── MAIN HANDLER ───────────────────────────────────────────
 async function handleMessage(phone, message, client) {
-  const session = getSession(phone);
-  const state   = session.state;
-  const input   = message.trim().toLowerCase();
+  const session  = getSession(phone);
+  const state    = session.state;
+  const input    = message.trim().toLowerCase();
+  const clientNo = client.botNumber;
 
-  // ── GLOBAL OVERRIDES ───────────────────────────────────
+  // ── GLOBAL OVERRIDES ─────────────────────────────────
   if (input === "menu" || input === "0" || input === "restart") {
     resetSession(phone);
-    return buildMenuMessage(client);
+    await typingDelay(600);
+    return buildMainMenu(client, phone, clientNo);
   }
 
   if (input === "cancel") {
     resetSession(phone);
+    await typingDelay(600);
     return "Order cancelled. No worries! 👋\n\nType *menu* to start again.";
   }
 
-  // ── HUMAN HANDOFF ──────────────────────────────────────
+  // ── HUMAN HANDOFF ─────────────────────────────────────
   if (state === STATES.HUMAN_HANDOFF) return null;
 
-  // ── CONFIRM STATE — exact match ────────────────────────
-  if (state === STATES.AWAITING_CONFIRM) {
-    return handleConfirmation(phone, input, client);
-  }
+  // ── STATE MACHINE ─────────────────────────────────────
 
-  // ── ALL OTHER STATES → ASK AI ──────────────────────────
-  const history = session.conversationHistory || [];
+  if (state === STATES.IDLE)          return buildMainMenu(client, phone, clientNo);
+  if (state === "MAIN_MENU")          return handleMainMenuSelection(phone, input, client, clientNo);
+  if (state === "SELECTING_PRODUCT")  return handleProductSelection(phone, input, client, clientNo);
+  if (state === "ENTERING_QUANTITY")  return handleQuantityInput(phone, input, client);
+  if (state === STATES.AWAITING_TYPE) return handleDeliveryType(phone, input, client);
+  if (state === STATES.AWAITING_LOCATION) return handleLocationInput(phone, input, client);
+  if (state === STATES.AWAITING_NAME) return handleNameInput(phone, input, client, clientNo);
+  if (state === STATES.AWAITING_CONFIRM)  return handleConfirmation(phone, input, client, clientNo);
+  if (state === "AWAITING_MPESA")     return handleMpesaNumber(phone, input, client, clientNo);
+  if (state === "AI_QUESTION")        return handleAIQuestion(phone, message, client, clientNo);
 
-  let aiResponse;
-  try {
-    aiResponse = await askClaude(message, history, client);
-  } catch (error) {
-    console.error("AI API failed:", error.message);
-    resetSession(phone);
-    return buildMenuMessage(client);
-  }
+  await typingDelay(600);
+  return buildMainMenu(client, phone, clientNo);
+}
 
-  // Save conversation history (last 10 messages)
-  const updatedHistory = [
-    ...history,
-    { role: "user",      content: message },
-    { role: "assistant", content: JSON.stringify(aiResponse) },
-  ].slice(-10);
+// ── BUILD MAIN MENU ────────────────────────────────────────
+async function buildMainMenu(client, phone, clientNo) {
+  const profile  = getCustomer(clientNo, phone);
+  const greeting = buildGreeting(profile, client.business.name);
+  await typingDelay(800);
+  setState(phone, { state: "MAIN_MENU" });
 
-  setState(phone, { conversationHistory: updatedHistory });
+  const welcomeText = greeting || `👋 Welcome to *${client.business.name}*!`;
 
-  const intent = aiResponse.intent;
+  return `${welcomeText}\n\n` +
+    `What would you like to do?\n\n` +
+    `1️⃣ View prices & menu\n` +
+    `2️⃣ Place an order\n` +
+    `3️⃣ Delivery information\n` +
+    `4️⃣ Location & hours\n` +
+    `5️⃣ Ask a question\n` +
+    `6️⃣ Talk to someone\n\n` +
+    `Reply with a number 👇`;
+}
 
-  switch (intent) {
+// ── MAIN MENU SELECTION ────────────────────────────────────
+async function handleMainMenuSelection(phone, input, client, clientNo) {
+  await typingDelay(800);
 
-    case "general":
-      return aiResponse.reply;
-
-    case "order_start":
-      setState(phone, { state: STATES.AWAITING_ORDER });
-      return aiResponse.reply;
-
-    case "order_details": {
-      const itemName = aiResponse.item?.toLowerCase();
-      const quantity = parseFloat(aiResponse.quantity);
-      const prices   = client.prices;
-      const product  = prices[itemName];
-
-      if (!product) {
-        const available = Object.values(prices)
-          .filter(p => p.available)
-          .map(p => p.name).join(", ");
-        return `Sorry, we don't have "${aiResponse.item}" on our menu.\nAvailable: ${available}`;
-      }
-      if (!product.available) {
-        const available = Object.values(prices)
-          .filter(p => p.available)
-          .map(p => p.name).join(", ");
-        return `Sorry, *${product.name}* is out of stock today ❌\nAvailable: ${available}`;
-      }
-
-      const lineTotal = product.price * quantity;
-      setState(phone, {
-        state: STATES.AWAITING_TYPE,
-        orderDraft: { itemName: product.name, quantity, unit: product.unit || "", unitPrice: product.price, lineTotal },
-      });
-
-      const quantityText = product.unit ? `${quantity}${product.unit}` : `${quantity}`;
-      return aiResponse.reply || `Got it! *${product.name} × ${quantityText}* = KES ${lineTotal}\n\nPickup or delivery?`;
+  switch (input) {
+    case "1": {
+      setState(phone, { state: "MAIN_MENU" });
+      const prices = Object.values(client.prices).map(p => {
+        const unitText = p.unit ? `/${p.unit}` : "";
+        return `${p.available ? "✅" : "❌"} ${p.name} — KES ${p.price}${unitText}${!p.available ? " _(unavailable)_" : ""}`;
+      }).join("\n");
+      return `📋 *${client.business.name} — Today's Prices*\n\n${prices}\n\nType *2* to place an order or *menu* to go back 😊`;
     }
 
-    case "pickup":
-      setState(phone, {
-        state: STATES.AWAITING_NAME,
-        orderDraft: { ...session.orderDraft, deliveryType: "pickup" },
-      });
-      return aiResponse.reply || "Great! What is your name?";
-
-    case "delivery":
-      setState(phone, {
-        state: STATES.AWAITING_LOCATION,
-        orderDraft: { ...session.orderDraft, deliveryType: "delivery" },
-      });
-      return aiResponse.reply || "Please enter your delivery location:";
-
-    case "got_location":
-      setState(phone, {
-        state: STATES.AWAITING_NAME,
-        orderDraft: { ...session.orderDraft, deliveryLocation: aiResponse.location || message.trim() },
-      });
-      return aiResponse.reply || "Got it! What is your name?";
-
-    case "got_name": {
-      const name  = aiResponse.name || message.trim();
-      const draft = getSession(phone).orderDraft;
-      setState(phone, {
-        state: STATES.AWAITING_CONFIRM,
-        orderDraft: { ...draft, customerName: name },
-      });
-
-      const quantityText = draft.unit ? `${draft.quantity}${draft.unit}` : `${draft.quantity}`;
-      const deliveryLine = draft.deliveryType === "delivery"
-        ? `Delivery to: ${draft.deliveryLocation}\nDelivery fee: KES ${client.delivery.fee_min}–${client.delivery.fee_max}`
-        : "Pickup from store";
-
-      return `*Order Summary* 📋\n\n👤 Name: ${name}\n• ${draft.itemName} × ${quantityText}\n💰 Total: KES ${draft.lineTotal}\n🚚 ${deliveryLine}\n\nReply:\n*1* to Confirm ✅\n*2* to Cancel ❌`;
+    case "2": {
+      const available = Object.values(client.prices).filter(p => p.available);
+      if (available.length === 0) {
+        return `Sorry, no items are available right now 😔\n\nCall us: ${client.business.phone}`;
+      }
+      setState(phone, { state: "SELECTING_PRODUCT", productList: available });
+      const list = available.map((p, i) => {
+        const u = p.unit ? `/${p.unit}` : "";
+        return `${i + 1}️⃣ ${p.name} — KES ${p.price}${u}`;
+      }).join("\n");
+      return `🛒 *What would you like to order?*\n\n${list}\n\nReply with a number 👇`;
     }
 
-    case "human":
+    case "3": {
+      setState(phone, { state: "MAIN_MENU" });
+      const d = client.delivery;
+      if (!d.available) {
+        return `🚫 No delivery — Pickup only from:\n${client.business.location}\n\nType *menu* to go back.`;
+      }
+      return `🚚 *Delivery Information*\n\n` +
+        `• Available: Yes ✅\n` +
+        `• Fee: KES ${d.fee_min}–${d.fee_max}\n` +
+        `• Time: ${d.estimated_time}\n\n` +
+        `Type *2* to order or *menu* to go back.`;
+    }
+
+    case "4": {
+      setState(phone, { state: "MAIN_MENU" });
+      return `📍 *Location & Hours*\n\n` +
+        `🏪 ${client.business.location}\n` +
+        `🕐 ${client.business.hours}\n` +
+        `📞 ${client.business.phone}\n` +
+        `🗺️ ${client.business.maps_link}\n\n` +
+        `Type *menu* to go back.`;
+    }
+
+    case "5": {
+      setState(phone, { state: "AI_QUESTION" });
+      return `💬 *Ask me anything!*\n\nWhat would you like to know about ${client.business.name}?\n\n_(Type *menu* anytime to go back.)_`;
+    }
+
+    case "6": {
       setState(phone, { state: STATES.HUMAN_HANDOFF });
-      return aiResponse.reply || `Connecting you to an attendant shortly. 👤\n\nCall us: ${client.business.phone}`;
+      return `👤 *Connecting you to our team...*\n\nSomeone will be with you shortly.\n\nOr call us: *${client.business.phone}*`;
+    }
 
     default:
-      return aiResponse.reply || "I didn't quite get that. Type *menu* to start fresh.";
+      return handleAIQuestion(phone, input, client, clientNo);
   }
 }
 
-// ── handleConfirmation ─────────────────────────────────────
-async function handleConfirmation(phone, input, client) {
+// ── PRODUCT SELECTION ──────────────────────────────────────
+async function handleProductSelection(phone, input, client, clientNo) {
+  await typingDelay(800);
+  const session     = getSession(phone);
+  const productList = session.productList || Object.values(client.prices).filter(p => p.available);
+  const index       = parseInt(input) - 1;
+
+  if (isNaN(index) || index < 0 || index >= productList.length) {
+    const list = productList.map((p, i) => {
+      const u = p.unit ? `/${p.unit}` : "";
+      return `${i + 1}️⃣ ${p.name} — KES ${p.price}${u}`;
+    }).join("\n");
+    return `Please reply with a number from the list:\n\n${list}`;
+  }
+
+  const selected = productList[index];
+  setState(phone, {
+    state:      "ENTERING_QUANTITY",
+    orderDraft: { itemName: selected.name, unitPrice: selected.price, unit: selected.unit || "" },
+  });
+
+  const unitText = selected.unit || "units";
+  return `✅ *${selected.name}* selected!\n\nHow many *${unitText}* would you like?\n_(e.g. type *2* for 2${selected.unit || ""})_`;
+}
+
+// ── QUANTITY INPUT ─────────────────────────────────────────
+async function handleQuantityInput(phone, input, client) {
+  await typingDelay(800);
+  const quantity = parseFloat(input);
+  if (isNaN(quantity) || quantity <= 0) {
+    return `Please enter a valid quantity (e.g. *1*, *2*, *0.5*)`;
+  }
+
+  const draft     = getSession(phone).orderDraft;
+  const lineTotal = draft.unitPrice * quantity;
+  const qText     = draft.unit ? `${quantity}${draft.unit}` : `${quantity}`;
+
+  setState(phone, { state: STATES.AWAITING_TYPE, orderDraft: { ...draft, quantity, lineTotal } });
+
+  return `🛒 *${draft.itemName} × ${qText}* = *KES ${lineTotal}*\n\n` +
+    `How would you like to receive your order?\n\n` +
+    `1️⃣ Pickup from store 🏪\n` +
+    `2️⃣ Delivery to my location 🚚\n\n` +
+    `Reply with *1* or *2* 👇`;
+}
+
+// ── DELIVERY TYPE ──────────────────────────────────────────
+async function handleDeliveryType(phone, input, client) {
+  await typingDelay(800);
+
+  if (input === "1") {
+    setState(phone, { state: STATES.AWAITING_NAME, orderDraft: { ...getSession(phone).orderDraft, deliveryType: "pickup" } });
+    return `🏪 *Pickup selected!*\n\nWhat is your name for the order?`;
+  }
+  if (input === "2") {
+    if (!client.delivery.available) {
+      return `Sorry, delivery is not available.\n\nReply *1* for pickup instead.`;
+    }
+    setState(phone, { state: STATES.AWAITING_LOCATION, orderDraft: { ...getSession(phone).orderDraft, deliveryType: "delivery" } });
+    return `🚚 *Delivery selected!*\n\nPlease enter your delivery location:\n_(e.g. Rongai near Total)_`;
+  }
+
+  return `Please reply *1* for Pickup or *2* for Delivery 👇`;
+}
+
+// ── LOCATION INPUT ─────────────────────────────────────────
+async function handleLocationInput(phone, input, client) {
+  await typingDelay(800);
+  setState(phone, { state: STATES.AWAITING_NAME, orderDraft: { ...getSession(phone).orderDraft, deliveryLocation: input.trim() } });
+  return `📍 *${input.trim()}* noted!\n\nWhat is your name for the order?`;
+}
+
+// ── NAME INPUT ─────────────────────────────────────────────
+async function handleNameInput(phone, input, client, clientNo) {
+  await typingDelay(1000);
+  const name  = input.trim();
+  const draft = getSession(phone).orderDraft;
+  setState(phone, { state: STATES.AWAITING_CONFIRM, orderDraft: { ...draft, customerName: name } });
+  saveCustomer(clientNo, phone, { name });
+
+  const qText       = draft.unit ? `${draft.quantity}${draft.unit}` : `${draft.quantity}`;
+  const deliveryLine = draft.deliveryType === "delivery"
+    ? `🚚 Delivery to: ${draft.deliveryLocation}\n💸 Fee: KES ${client.delivery.fee_min}–${client.delivery.fee_max}`
+    : `🏪 Pickup from store`;
+
+  return `📋 *Order Summary*\n\n` +
+    `👤 Name: *${name}*\n` +
+    `🛒 Item: *${draft.itemName} × ${qText}*\n` +
+    `💰 Total: *KES ${draft.lineTotal}*\n` +
+    `${deliveryLine}\n\n` +
+    `━━━━━━━━━━━━━━━\n` +
+    `*1* ✅ Confirm & Pay via M-Pesa\n` +
+    `*2* ❌ Cancel order\n\n` +
+    `Reply with *1* or *2* 👇`;
+}
+
+// ── CONFIRM ORDER → TRIGGER M-PESA ────────────────────────
+async function handleConfirmation(phone, input, client, clientNo) {
   if (input === "2") {
     resetSession(phone);
-    return "Order cancelled. No worries! 👋\n\nType *menu* to start again.";
+    await typingDelay(600);
+    return `Order cancelled. No worries! 👋\n\nType *menu* to start again.`;
   }
 
   if (input !== "1") {
-    return "Please reply *1* to confirm or *2* to cancel.";
+    return `Please reply *1* to confirm or *2* to cancel 👇`;
   }
+
+  await typingDelay(800);
+
+  // Ask for M-Pesa number
+  const profile      = getCustomer(clientNo, phone);
+  const savedPhone   = profile?.mpesaPhone;
+
+  setState(phone, { state: "AWAITING_MPESA" });
+
+  if (savedPhone) {
+    return `💳 *M-Pesa Payment*\n\n` +
+      `We have your number: *${savedPhone}*\n\n` +
+      `1️⃣ Use this number\n` +
+      `2️⃣ Enter a different number\n\n` +
+      `Reply with *1* or *2* 👇`;
+  }
+
+  return `💳 *M-Pesa Payment*\n\n` +
+    `Please enter the M-Pesa number to pay from:\n_(e.g. 0712345678)_`;
+}
+
+// ── M-PESA NUMBER INPUT → SEND STK PUSH ───────────────────
+async function handleMpesaNumber(phone, input, client, clientNo) {
+  await typingDelay(800);
 
   const session = getSession(phone);
   const draft   = session.orderDraft;
+  let mpesaPhone;
+
+  // Check if they selected option 1 (use saved number)
+  if (input === "1") {
+    const profile = getCustomer(clientNo, phone);
+    mpesaPhone    = profile?.mpesaPhone;
+    if (!mpesaPhone) {
+      setState(phone, { state: "AWAITING_MPESA" });
+      return `Please enter your M-Pesa number:\n_(e.g. 0712345678)_`;
+    }
+  } else if (input === "2") {
+    setState(phone, { state: "AWAITING_MPESA", awaitingNewPhone: true });
+    return `Please enter your M-Pesa number:\n_(e.g. 0712345678)_`;
+  } else {
+    // They typed a phone number directly
+    mpesaPhone = input.replace(/\s+/g, "");
+    if (mpesaPhone.length < 9) {
+      return `Please enter a valid M-Pesa number:\n_(e.g. 0712345678)_`;
+    }
+  }
+
+  // Format and save M-Pesa number
+  const formattedPhone = formatPhone(mpesaPhone);
+  saveCustomer(clientNo, phone, { mpesaPhone: formattedPhone });
 
   // Build order object
   const order = {
@@ -161,62 +311,98 @@ async function handleConfirmation(phone, input, client) {
     deliveryType:     draft.deliveryType,
     deliveryLocation: draft.deliveryLocation || null,
     totalPrice:       draft.lineTotal,
-    status:           "pending",
+    status:           "pending_payment",
     createdAt:        new Date().toISOString(),
   };
 
-  // ── Save order ─────────────────────────────────────────
+  // Save order
   try {
     const { saveOrder } = require("./clientManager");
-    saveOrder(client.botNumber || phone, order.id, order);
-  } catch (e) {
-    console.error("Order save error:", e.message);
-  }
+    saveOrder(clientNo, order.id, order);
+  } catch (e) { console.error("Order save error:", e.message); }
 
-  // ── Notify owner via WhatsApp ──────────────────────────
+  // Update customer memory
   try {
-    const { sendWhatsAppMessage } = require("../routes/whatsapp");
-    const managerPhone  = client.whatsapp.manager_phone.replace("+", "");
-    const phoneNumberId = client.whatsapp.phone_number_id;
+    addOrderToHistory(clientNo, phone, order);
+  } catch (e) { console.error("Memory update error:", e.message); }
 
-    const deliveryLine = order.deliveryType === "delivery"
-      ? `🚚 Delivery to: ${order.deliveryLocation}`
-      : `🏪 Pickup from store`;
+  // Send STK Push
+  try {
+    const { sendSTKPush }              = require("./mpesaService");
+    const { registerPendingPayment }   = require("../routes/mpesa");
 
-    const notification =
-      `🔔 *New Order — ${client.business.name}*\n\n` +
-      `Order ID: *${order.id.slice(0, 8).toUpperCase()}*\n` +
-      `👤 Customer: ${order.customerName}\n` +
-      `📞 Phone: +${order.customerPhone}\n` +
-      `🛒 Item: ${order.items[0].name} × ${order.items[0].quantity}${order.items[0].unit || ""}\n` +
-      `💰 Total: KES ${order.totalPrice}\n` +
-      `${deliveryLine}\n` +
-      `🕐 Time: ${new Date().toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" })}`;
+    const stkResult = await sendSTKPush(
+      formattedPhone,
+      order.totalPrice,
+      order.id,
+      client.business.name
+    );
 
-    await sendWhatsAppMessage(phoneNumberId, managerPhone, notification, client);
-    console.log(`📲 Owner notified: ${managerPhone}`);
+    // Register pending payment so callback can find it
+    registerPendingPayment(stkResult.checkoutRequestId, {
+      order,
+      client,
+      customerPhone: phone,
+    });
+
+    resetSession(phone);
+
+    return `💳 *M-Pesa prompt sent!*\n\n` +
+      `Check your phone *${mpesaPhone}* and enter your M-Pesa PIN to pay *KES ${order.totalPrice}*.\n\n` +
+      `Order ID: *${order.id.slice(0, 8).toUpperCase()}*\n\n` +
+      `⏳ You have 60 seconds to complete payment.\n\n` +
+      `📞 Need help? Call: ${client.business.phone}`;
+
   } catch (e) {
-    console.error("Owner notification error:", e.message);
+    console.error("STK Push error:", e.message);
+    resetSession(phone);
+
+    // Fallback — confirm order without payment (STK failed)
+    return `⚠️ *M-Pesa prompt could not be sent.*\n\n` +
+      `Your order *${order.id.slice(0, 8).toUpperCase()}* has been received.\n` +
+      `Please pay *KES ${order.totalPrice}* on arrival or call us to arrange payment:\n\n` +
+      `📞 ${client.business.phone}\n\n` +
+      `Type *menu* to start a new order.`;
   }
-
-  resetSession(phone);
-
-  return `✅ *Order Confirmed!*\n\nOrder ID: ${order.id.slice(0, 8).toUpperCase()}\n\nWe have received your order and will ${draft.deliveryType === "delivery" ? "deliver it shortly 🚚" : "have it ready for pickup 🏪"}.\n\nFor queries call: ${client.business.phone}\n\nThank you! 🙏`;
 }
 
-// ── buildMenuMessage ───────────────────────────────────────
-function buildMenuMessage(client) {
-  const available = Object.values(client.prices)
-    .filter(p => p.available)
-    .map(p => {
-      const unitText = p.unit ? ` / ${p.unit}` : "";
-      return `• ${p.name} — KES ${p.price}${unitText}`;
-    })
-    .join("\n");
+// ── AI QUESTION HANDLER ────────────────────────────────────
+async function handleAIQuestion(phone, message, client, clientNo) {
+  await typingDelay(1200);
+  const session         = getSession(phone);
+  const history         = session.conversationHistory || [];
+  const customerProfile = getCustomer(clientNo, phone);
+  const customerContext = customerProfile
+    ? `\nCUSTOMER CONTEXT:\n- Name: ${customerProfile.name || "unknown"}\n- Orders: ${customerProfile.orderCount || 0}\n- Favourite: ${customerProfile.preferences?.favouriteItem || "none"}`
+    : "";
 
-  const availableText = available || "No items are available right now.";
+  let aiResponse;
+  try {
+    aiResponse = await askClaude(message, history, client, customerContext);
+  } catch (error) {
+    console.error("AI API failed:", error.message);
+    return `Sorry, I couldn't process that.\n\nCall us: ${client.business.phone}\n\nOr type *menu* to restart.`;
+  }
 
-  return `👋 Welcome to *${client.business.name}*\n\n📋 *Available today:*\n${availableText}\n\nJust type naturally — I understand English and Swahili! 😊\n\nOr type *menu* anytime to restart.`;
+  const updatedHistory = [
+    ...history,
+    { role: "user",      content: message },
+    { role: "assistant", content: JSON.stringify(aiResponse) },
+  ].slice(-10);
+
+  setState(phone, { conversationHistory: updatedHistory });
+
+  if (aiResponse.intent === "order_start" || aiResponse.intent === "order_details") {
+    setState(phone, { state: "MAIN_MENU" });
+    return `${aiResponse.reply || "Let me help you place an order!"}\n\nType *2* to start your order.`;
+  }
+
+  if (aiResponse.intent === "human") {
+    setState(phone, { state: STATES.HUMAN_HANDOFF });
+    return aiResponse.reply || `Connecting you to our team 👤\n\nOr call: ${client.business.phone}`;
+  }
+
+  return `${aiResponse.reply || "I didn't quite get that."}\n\n_Type *menu* to go back or ask another question._`;
 }
 
 module.exports = { handleMessage };

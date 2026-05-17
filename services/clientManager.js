@@ -1,153 +1,112 @@
 // ============================================================
 // services/clientManager.js
 // ============================================================
-// PURPOSE: The multi-client brain.
-//
-// This file answers one question every time a message arrives:
-//   "Which client owns this WhatsApp number?"
-//
-// HOW IT WORKS:
-//   Every client has a config file in the clients/ folder.
-//   The filename is their WhatsApp bot number e.g:
-//     clients/+254118612755.json  ← Sample Store
-//     clients/+254733000000.json  ← Second Client
-//     clients/+254744000000.json  ← Third Client
-//
-//   When Meta sends a webhook, it tells us:
-//     - which number RECEIVED the message (the bot number)
-//   We use that number to find the right config file.
-//   Then the bot replies using that client's data only.
-//
-// ADDING A NEW CLIENT:
-//   1. Copy TEMPLATE.json
-//   2. Rename it to their WhatsApp number e.g +254733000000.json
-//   3. Fill in their business data
-//   4. Done — no code changes needed
+// PURPOSE: Loads the right client config based on WhatsApp number
+//   - getClient(number) → returns client config object
+//   - listClients()     → returns all registered clients
+//   - saveOrder()       → saves order to client file
 // ============================================================
 
 const fs   = require("fs");
 const path = require("path");
 
-// Path to the clients folder
 const CLIENTS_DIR = path.join(__dirname, "../clients");
 
-// In-memory cache — loads each client config once
-// then keeps it in memory for speed
-// { "+254118612755": { business:{}, prices:{}, ... } }
+// Cache loaded clients in memory so we don't read disk every message
 const clientCache = {};
 
-// ── getClient ──────────────────────────────────────────────
-// Returns the config for the given WhatsApp number.
-// botNumber = the number that RECEIVED the message
-//             e.g. "+254118612755" or "254118612755"
-function getClient(botNumber) {
-  // Normalise number format — always use + prefix
-  // Meta sometimes sends numbers without + sign
-  const normalised = botNumber.startsWith("+")
-    ? botNumber
-    : `+${botNumber}`;
-
-  // Return from cache if already loaded
-  if (clientCache[normalised]) {
-    return clientCache[normalised];
-  }
-
-  // Build path to this client's config file
-  const filePath = path.join(CLIENTS_DIR, `${normalised}.json`);
-
-  // Check if config file exists
-  if (!fs.existsSync(filePath)) {
-    console.warn(`⚠️  No client config found for number: ${normalised}`);
-    console.warn(`   Create: clients/${normalised}.json`);
-    return null; // caller must handle null
-  }
-
-  // Load and parse the config
+// ── Load all clients on startup ────────────────────────────
+function loadAllClients() {
   try {
-    const raw    = fs.readFileSync(filePath, "utf8");
-    const config = JSON.parse(raw);
-    config.botNumber = normalised;
+    const files = fs.readdirSync(CLIENTS_DIR).filter(f => f.endsWith(".json") && f !== "TEMPLATE.json");
+    files.forEach(file => {
+      const filePath = path.join(CLIENTS_DIR, file);
+      try {
+        const data   = JSON.parse(fs.readFileSync(filePath, "utf8"));
+        const number = file.replace(".json", ""); // e.g. "+254118612755"
+        clientCache[number] = data;
+        // Store the bot number on the object for reference
+        clientCache[number].botNumber = number;
+        console.log(`✅ Loaded client: ${data.business?.name} (${number})`);
+      } catch (e) {
+        console.error(`Failed to load client file ${file}:`, e.message);
+      }
+    });
+  } catch (e) {
+    console.error("Could not read clients directory:", e.message);
+  }
+}
 
-    // Store in cache for next time
-    clientCache[normalised] = config;
+// Load on startup
+loadAllClients();
 
-    console.log(`✅ Loaded client: ${config.business.name} (${normalised})`);
-    return config;
+// ── Get client by WhatsApp number ──────────────────────────
+// The number can come in different formats — normalize it
+function getClient(number) {
+  if (!number) return null;
 
-  } catch (error) {
-    console.error(`❌ Failed to load client config for ${normalised}:`, error.message);
+  const cleaned = String(number).replace(/\s+/g, "").replace(/^\+/, "");
+
+  // Try different formats
+  const attempts = [
+    `+${cleaned}`,           // +254118612755
+    `+0${cleaned}`,          // fallback
+  ];
+
+  for (const attempt of attempts) {
+    if (clientCache[attempt]) return clientCache[attempt];
+  }
+
+  // Try partial match (last 9 digits)
+  const last9 = cleaned.slice(-9);
+  const match  = Object.keys(clientCache).find(k => k.slice(-9) === last9);
+  if (match) return clientCache[match];
+
+  return null;
+}
+
+// ── List all registered clients ────────────────────────────
+function listClients() {
+  return Object.values(clientCache).map(c => ({
+    name:   c.business?.name,
+    number: c.botNumber,
+    plan:   c.plan || "basic",
+  }));
+}
+
+// ── Save order to client file ──────────────────────────────
+function saveOrder(clientNumber, orderId, orderData) {
+  try {
+    const clean    = String(clientNumber).replace("+", "");
+    const filePath = path.join(CLIENTS_DIR, `+${clean}.json`);
+    const data     = JSON.parse(fs.readFileSync(filePath, "utf8"));
+
+    if (!data.orders) data.orders = [];
+    data.orders.push(orderData);
+
+    // Keep last 100 orders only
+    if (data.orders.length > 100) data.orders = data.orders.slice(-100);
+
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf8");
+    console.log(`💾 Order ${orderId} saved for ${data.business?.name}`);
+  } catch (e) {
+    console.error("saveOrder error:", e.message);
+  }
+}
+
+// ── Reload a single client (useful after config update) ───
+function reloadClient(clientNumber) {
+  try {
+    const clean    = String(clientNumber).replace("+", "");
+    const filePath = path.join(CLIENTS_DIR, `+${clean}.json`);
+    const data     = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    clientCache[`+${clean}`] = data;
+    clientCache[`+${clean}`].botNumber = `+${clean}`;
+    return data;
+  } catch (e) {
+    console.error("reloadClient error:", e.message);
     return null;
   }
 }
 
-// ── saveOrder ──────────────────────────────────────────────
-// Saves a new order to the client's config file.
-// Each client stores their own orders inside their JSON file.
-// orderId     = unique order ID
-// orderData   = the full order object
-// botNumber   = which client this belongs to
-function saveOrder(botNumber, orderId, orderData) {
-  const normalised = botNumber.startsWith("+") ? botNumber : `+${botNumber}`;
-  const filePath   = path.join(CLIENTS_DIR, `${normalised}.json`);
-
-  if (!fs.existsSync(filePath)) return false;
-
-  try {
-    const raw    = fs.readFileSync(filePath, "utf8");
-    const config = JSON.parse(raw);
-
-    // Add order to this client's orders array
-    if (!config.orders) config.orders = [];
-    config.orders.push(orderData);
-
-    // Write back to file
-    fs.writeFileSync(filePath, JSON.stringify(config, null, 2), "utf8");
-
-    // Update cache
-    clientCache[normalised] = config;
-
-    return true;
-  } catch (error) {
-    console.error("Failed to save order:", error.message);
-    return false;
-  }
-}
-
-// ── getClientOrders ────────────────────────────────────────
-// Returns all orders for a specific client
-function getClientOrders(botNumber) {
-  const client = getClient(botNumber);
-  return client ? (client.orders || []) : [];
-}
-
-// ── refreshClient ──────────────────────────────────────────
-// Forces a reload of client config from disk.
-// Useful when you update a client's prices manually.
-// Call this via an API endpoint: POST /admin/refresh/:number
-function refreshClient(botNumber) {
-  const normalised = botNumber.startsWith("+") ? botNumber : `+${botNumber}`;
-  delete clientCache[normalised]; // clear cache
-  return getClient(normalised);   // reload from disk
-}
-
-// ── listClients ────────────────────────────────────────────
-// Returns a list of all registered client numbers.
-// Used for the admin dashboard.
-function listClients() {
-  try {
-    const files = fs.readdirSync(CLIENTS_DIR);
-    return files
-      .filter(f => f.endsWith(".json") && f !== "TEMPLATE.json")
-      .map(f => f.replace(".json", ""));
-  } catch (error) {
-    return [];
-  }
-}
-
-module.exports = {
-  getClient,
-  saveOrder,
-  getClientOrders,
-  refreshClient,
-  listClients,
-};
+module.exports = { getClient, listClients, saveOrder, reloadClient };
