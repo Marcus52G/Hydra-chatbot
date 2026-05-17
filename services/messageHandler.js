@@ -1,20 +1,12 @@
 // ============================================================
 // services/messageHandler.js  (MULTI-CLIENT VERSION)
 // ============================================================
-// WHAT CHANGED:
-//   OLD: reads prices from db.json (one business only)
-//   NEW: reads prices from client config passed in as parameter
-//        every function receives the client object
-//        bot replies as the correct business automatically
-// ============================================================
 
 const { getSession, setState, resetSession, STATES } = require("./stateManager");
 const { askClaude } = require("./aiService");
 const { v4: uuidv4 } = require("uuid");
 
 // ── MAIN HANDLER ───────────────────────────────────────────
-// NEW PARAMETER: client = the config loaded by clientManager
-// This tells the bot which business it is right now
 async function handleMessage(phone, message, client) {
   const session = getSession(phone);
   const state   = session.state;
@@ -44,11 +36,9 @@ async function handleMessage(phone, message, client) {
 
   let aiResponse;
   try {
-    // Pass client config to AI so it knows the business data
     aiResponse = await askClaude(message, history, client);
   } catch (error) {
     console.error("AI API failed:", error.message);
-    // Fallback to menu when AI unavailable
     resetSession(phone);
     return buildMenuMessage(client);
   }
@@ -76,7 +66,7 @@ async function handleMessage(phone, message, client) {
     case "order_details": {
       const itemName = aiResponse.item?.toLowerCase();
       const quantity = parseFloat(aiResponse.quantity);
-      const prices   = client.prices; // ← from CLIENT config, not db.json
+      const prices   = client.prices;
       const product  = prices[itemName];
 
       if (!product) {
@@ -175,7 +165,7 @@ async function handleConfirmation(phone, input, client) {
     createdAt:        new Date().toISOString(),
   };
 
-  // Save order to this client's config file
+  // ── Save order ─────────────────────────────────────────
   try {
     const { saveOrder } = require("./clientManager");
     saveOrder(client.botNumber || phone, order.id, order);
@@ -183,13 +173,38 @@ async function handleConfirmation(phone, input, client) {
     console.error("Order save error:", e.message);
   }
 
+  // ── Notify owner via WhatsApp ──────────────────────────
+  try {
+    const { sendWhatsAppMessage } = require("../routes/whatsapp");
+    const managerPhone  = client.whatsapp.manager_phone.replace("+", "");
+    const phoneNumberId = client.whatsapp.phone_number_id;
+
+    const deliveryLine = order.deliveryType === "delivery"
+      ? `🚚 Delivery to: ${order.deliveryLocation}`
+      : `🏪 Pickup from store`;
+
+    const notification =
+      `🔔 *New Order — ${client.business.name}*\n\n` +
+      `Order ID: *${order.id.slice(0, 8).toUpperCase()}*\n` +
+      `👤 Customer: ${order.customerName}\n` +
+      `📞 Phone: +${order.customerPhone}\n` +
+      `🛒 Item: ${order.items[0].name} × ${order.items[0].quantity}${order.items[0].unit || ""}\n` +
+      `💰 Total: KES ${order.totalPrice}\n` +
+      `${deliveryLine}\n` +
+      `🕐 Time: ${new Date().toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" })}`;
+
+    await sendWhatsAppMessage(phoneNumberId, managerPhone, notification, client);
+    console.log(`📲 Owner notified: ${managerPhone}`);
+  } catch (e) {
+    console.error("Owner notification error:", e.message);
+  }
+
   resetSession(phone);
 
-  return `✅ *Order Confirmed!*\n\nOrder ID: ${order.id.slice(0, 8).toUpperCase()}\n\nWe have received your order and will ${draft.deliveryType === "delivery" ? "deliver it shortly 🚚" : "have it ready for pickup 🏪"}.\n\nFor queries call: ${client.business.phone}\n\nThank you!`;
+  return `✅ *Order Confirmed!*\n\nOrder ID: ${order.id.slice(0, 8).toUpperCase()}\n\nWe have received your order and will ${draft.deliveryType === "delivery" ? "deliver it shortly 🚚" : "have it ready for pickup 🏪"}.\n\nFor queries call: ${client.business.phone}\n\nThank you! 🙏`;
 }
 
 // ── buildMenuMessage ───────────────────────────────────────
-// Builds menu from THIS CLIENT's prices — not db.json
 function buildMenuMessage(client) {
   const available = Object.values(client.prices)
     .filter(p => p.available)
@@ -201,7 +216,7 @@ function buildMenuMessage(client) {
 
   const availableText = available || "No items are available right now.";
 
-  return `Welcome to ${client.business.name} 🛒\n\nHow can I help you today?\n\n📋 *Available today:*\n${availableText}\n\nJust type naturally — I understand English and Swahili! 😊\n\nOr type *menu* anytime to restart.`;
+  return `👋 Welcome to *${client.business.name}*\n\n📋 *Available today:*\n${availableText}\n\nJust type naturally — I understand English and Swahili! 😊\n\nOr type *menu* anytime to restart.`;
 }
 
 module.exports = { handleMessage };
