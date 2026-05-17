@@ -18,6 +18,20 @@
     "fee_max":        300,
     "estimated_time": "30-90 minutes"
   },
+  "faqs": {
+    "Do you sell bones?": "Yes! Bones available at KES 50/kg. Perfect for soup 🍲",
+    "Is your meat halal?": "Yes, all our meat is halal certified ✅",
+    "Do you accept M-Pesa?": "Yes! M-Pesa Till No: 123456 or pay cash on delivery 📱",
+    "Do you do bulk orders?": "Yes! For orders above 10kg please call: +254712345678",
+    "Do you have parking?": "Yes, free parking available outside the shop 🚗"
+  },
+  "rules": [
+    "Always reply in the same language the customer used",
+    "Always ask if the customer wants anything else before ending the conversation",
+    "If a customer complains about quality, apologize sincerely and offer the manager's number",
+    "For bulk orders above 10kg, always refer to the phone number",
+    "Always end every message with a follow-up question or next step"
+  ],
   "whatsapp": {
     "phone_number_id": "1176701305517761",
     "manager_phone":   "+254794836505"

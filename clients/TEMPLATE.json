@@ -1,27 +1,39 @@
 {
   "business": {
-    "name": "Your Business",
-    "category": "Retail Shop",
-    "phone": "+254700000000",
-    "location": "Your Street, Nairobi",
-    "maps_link": "https://maps.google.com/?q=-1.2921,36.8219",
-    "hours": "Mon-Sat: 8am - 8pm | Sun: 9am - 4pm"
+    "name":      "Mama Nyama Butchery",
+    "phone":     "+254712345678",
+    "location":  "Tom Mboya Street, Nairobi",
+    "maps_link": "https://maps.google.com/?q=-1.2864,36.8172",
+    "hours":     "Mon-Sat: 6am - 8pm | Sun: 7am - 4pm"
   },
   "prices": {
-    "coffee": { "name": "Coffee", "price": 120, "unit": "cup", "available": true },
-    "bread": { "name": "Bread", "price": 80, "unit": "loaf", "available": true },
-    "tshirt": { "name": "T-shirt", "price": 900, "unit": "piece", "available": true },
-    "lotion": { "name": "Lotion", "price": 450, "unit": "bottle", "available": false }
+    "beef":    { "name": "Beef",    "price": 600, "unit": "kg", "available": true  },
+    "goat":    { "name": "Goat",    "price": 750, "unit": "kg", "available": false },
+    "chicken": { "name": "Chicken", "price": 500, "unit": "kg", "available": true  },
+    "pork":    { "name": "Pork",    "price": 550, "unit": "kg", "available": true  }
   },
   "delivery": {
     "available":      true,
-    "fee_min":        150,
-    "fee_max":        350,
-    "estimated_time": "45-90 minutes"
+    "fee_min":        100,
+    "fee_max":        300,
+    "estimated_time": "30-90 minutes"
   },
+  "faqs": {
+    "Do you sell bones?": "Yes! Bones are available at KES 50/kg. Great for soup 🍲",
+    "Is your meat halal?": "Yes, all our meat is halal certified ✅",
+    "Do you accept M-Pesa?": "Yes! M-Pesa Till No: 123456 or pay on delivery 📱",
+    "Do you do bulk orders?": "Yes we do! For orders above 10kg call us: +254712345678",
+    "Do you have parking?": "Yes, free parking is available outside the shop 🚗"
+  },
+  "rules": [
+    "Always mention the daily special if available",
+    "Always ask if the customer wants anything else before ending",
+    "If customer complains about quality, apologize sincerely and offer the manager's number",
+    "For bulk orders above 10kg, always refer to the phone number"
+  ],
   "whatsapp": {
-    "phone_number_id": "REPLACE_WITH_CLIENT_PHONE_NUMBER_ID",
-    "manager_phone":   "+254722000000"
+    "phone_number_id": "1176701305517761",
+    "manager_phone":   "+254794836505"
   },
   "orders": []
 }
