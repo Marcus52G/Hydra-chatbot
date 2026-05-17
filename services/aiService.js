@@ -1,13 +1,15 @@
 // ============================================================
-// services/aiService.js  (GEMINI VERSION)
+// services/aiService.js  (GROQ VERSION)
 // ============================================================
 // WHAT CHANGED:
-//   OLD: uses Claude (Anthropic) API — paid, no free tier
-//   NEW: uses Gemini 2.0 Flash (Google) — free tier available
-//        same system prompt, same JSON output format
-//        messageHandler.js needs NO changes
+//   OLD: Gemini (Google) — free tier blocked in Kenya
+//   NEW: Groq — genuinely free, 14,400 requests/day, works in Kenya
+//        Model: llama-3.1-8b-instant — fast, smart, free
+//        Same system prompt, same JSON output format
+//        messageHandler.js needs ZERO changes
 // ============================================================
-console.log("🤖 aiService loaded: GEMINI VERSION");
+
+console.log("🤖 aiService loaded: GROQ VERSION");
 
 // ── Build system prompt from CLIENT config ─────────────────
 function buildSystemPrompt(client) {
@@ -72,81 +74,59 @@ ALWAYS respond with a valid JSON object ONLY. No extra text, no markdown, no bac
 CRITICAL: Return ONLY the JSON object. Nothing before or after it. No markdown, no backticks.`;
 }
 
-// ── askGemini ──────────────────────────────────────────────
-async function askGemini(customerMessage, conversationHistory = [], client) {
-  const apiKey = process.env.GEMINI_API_KEY;
+// ── askGroq ────────────────────────────────────────────────
+async function askGroq(customerMessage, conversationHistory = [], client) {
+  const apiKey = process.env.GROQ_API_KEY;
 
   if (!apiKey) {
-    throw new Error("GEMINI_API_KEY not set in environment variables");
+    throw new Error("GROQ_API_KEY not set in environment variables");
   }
 
-  const systemPrompt = buildSystemPrompt(client);
-
-  // Gemini uses "contents" array with roles "user" and "model"
-  // We inject the system prompt as the first user+model exchange
-  const contents = [
-    {
-      role: "user",
-      parts: [{ text: systemPrompt }],
-    },
-    {
-      role: "model",
-      parts: [{ text: '{"intent":"general","reply":"Understood. I am ready to assist customers."}' }],
-    },
-    // Inject conversation history
+  const messages = [
+    { role: "system", content: buildSystemPrompt(client) },
     ...conversationHistory.map(msg => ({
-      role: msg.role === "assistant" ? "model" : "user",
-      parts: [{ text: msg.content }],
+      role:    msg.role === "assistant" ? "assistant" : "user",
+      content: msg.content,
     })),
-    // Current customer message
-    {
-      role: "user",
-      parts: [{ text: customerMessage }],
-    },
+    { role: "user", content: customerMessage },
   ];
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-
-  const response = await fetch(url, {
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type":  "application/json",
     },
     body: JSON.stringify({
-      contents,
-      generationConfig: {
-        temperature:     0.3,  // low = more consistent JSON output
-        maxOutputTokens: 500,
-      },
+      model:       "llama-3.1-8b-instant",
+      messages,
+      temperature: 0.3,
+      max_tokens:  500,
     }),
   });
 
   if (!response.ok) {
     const err = await response.json();
-    throw new Error(`Gemini API error: ${err.error?.message}`);
+    throw new Error(`Groq API error: ${err.error?.message}`);
   }
 
   const data = await response.json();
-
-  // Extract text from Gemini response
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+  const text = data.choices?.[0]?.message?.content?.trim();
 
   if (!text) {
-    throw new Error("Gemini returned empty response");
+    throw new Error("Groq returned empty response");
   }
 
-  // Strip markdown backticks if Gemini wraps in ```json ... ```
+  // Strip markdown backticks if model wraps in ```json...```
   const clean = text.replace(/```json|```/g, "").trim();
 
   try {
     return JSON.parse(clean);
   } catch (e) {
-    console.error("Gemini returned non-JSON:", text);
+    console.error("Groq returned non-JSON:", text);
     return { intent: "general", reply: clean };
   }
 }
 
-// ── Export as askClaude so messageHandler.js needs no changes
-// messageHandler.js does: const { askClaude } = require("./aiService")
-// We just export askGemini under the same name — zero changes elsewhere
-module.exports = { askClaude: askGemini };
+// Export as askClaude so messageHandler.js needs zero changes
+module.exports = { askClaude: askGroq };
