@@ -1,16 +1,17 @@
 // ============================================================
-// routes/whatsapp.js  (MULTI-CLIENT VERSION)
-// ============================================================
-// WHAT CHANGED: detects which client owns the receiving number
-// loads that client's config, replies as that business
+// routes/whatsapp.js  (PHASE 3 — BROADCAST VERSION)
 // ============================================================
 
 const express           = require("express");
 const router            = express.Router();
 const { handleMessage } = require("../services/messageHandler");
 const { getClient, listClients } = require("../services/clientManager");
+const { handleBroadcastCommand, confirmBroadcast } = require("./broadcast");
 
 const VERIFY_TOKEN = process.env.WA_VERIFY_TOKEN;
+
+// Pending broadcasts per manager phone
+const pendingBroadcasts = {};
 
 // ── GET /webhook — Meta verification ──────────────────────
 router.get("/", (req, res) => {
@@ -49,22 +50,80 @@ router.post("/", async (req, res) => {
       return;
     }
 
-    // Load the correct client for this bot number
     const client = getClient(receivingNumber);
-
     if (!client) {
       console.warn(`No client config found for: ${receivingNumber}`);
-      console.warn(`Create clients/+${receivingNumber}.json to register`);
       return;
     }
 
     console.log(`📨 [${client.business.name}] from ${customerPhone}: "${customerText}"`);
 
-    // Pass client config to handler so it knows which business
+    // ── Check if message is from the manager ──────────────
+    const managerPhone = client.whatsapp.manager_phone?.replace("+", "");
+    const isManager    = managerPhone && customerPhone === managerPhone;
+
+    if (isManager) {
+      const upperText = customerText.toUpperCase().trim();
+
+      // Handle broadcast commands
+      if (upperText.startsWith("BROADCAST")) {
+        const reply = await handleBroadcastCommand(customerText, client, sendWhatsAppMessage);
+        // Save pending broadcast
+        if (reply.includes("CONFIRM BROADCAST")) {
+          const filter  = upperText.includes("LAST30") ? "last30"
+            : upperText.includes("REPEAT") ? "repeat"
+            : upperText.includes("NEW")    ? "new"
+            : "all";
+          const message = customerText.slice(customerText.indexOf(":") + 1).trim();
+          pendingBroadcasts[customerPhone] = { filter, message, clientNumber: client.botNumber };
+        }
+        await sendWhatsAppMessage(receivingNumber, customerPhone, reply, client);
+        return;
+      }
+
+      // Confirm broadcast
+      if (upperText === "CONFIRM BROADCAST") {
+        const pending = pendingBroadcasts[customerPhone];
+        if (!pending) {
+          await sendWhatsAppMessage(receivingNumber, customerPhone, "No pending broadcast found. Send a BROADCAST command first.", client);
+          return;
+        }
+        delete pendingBroadcasts[customerPhone];
+        const result = await confirmBroadcast(pending, client, sendWhatsAppMessage);
+        await sendWhatsAppMessage(receivingNumber, customerPhone, result, client);
+        return;
+      }
+
+      // Cancel broadcast
+      if (upperText === "CANCEL BROADCAST") {
+        delete pendingBroadcasts[customerPhone];
+        await sendWhatsAppMessage(receivingNumber, customerPhone, "❌ Broadcast cancelled.", client);
+        return;
+      }
+
+      // Manager stats command
+      if (upperText === "STATS" || upperText === "STATUS") {
+        const { getBroadcastStats } = require("../services/broadcastService");
+        const stats = getBroadcastStats(client.botNumber);
+        const reply =
+          `📊 *${client.business.name} — Stats*\n\n` +
+          `👥 Total customers: *${stats.all}*\n` +
+          `🔄 Active (last 30d): *${stats.last30}*\n` +
+          `⭐ Repeat customers: *${stats.repeat}*\n` +
+          `🆕 New customers: *${stats.new}*\n\n` +
+          `*Broadcast commands:*\n` +
+          `BROADCAST ALL: message\n` +
+          `BROADCAST LAST30: message\n` +
+          `BROADCAST REPEAT: message\n` +
+          `BROADCAST NEW: message`;
+        await sendWhatsAppMessage(receivingNumber, customerPhone, reply, client);
+        return;
+      }
+    }
+
+    // ── Regular customer message ───────────────────────────
     const reply = await handleMessage(customerPhone, customerText, client);
-
-    if (reply === null) return; // human handoff — stay silent
-
+    if (reply === null) return;
     await sendWhatsAppMessage(receivingNumber, customerPhone, reply, client);
 
   } catch (error) {
@@ -72,20 +131,17 @@ router.post("/", async (req, res) => {
   }
 });
 
-// ── GET /webhook/clients — list registered clients ─────────
+// ── GET /webhook/clients ───────────────────────────────────
 router.get("/clients", (req, res) => {
   const clients = listClients();
   res.json({ success: true, count: clients.length, clients });
 });
 
 // ── sendWhatsAppMessage ────────────────────────────────────
-// Uses the client's own phone_number_id for sending
 async function sendWhatsAppMessage(botNumber, to, text, client) {
-  const phoneNumberId = client?.whatsapp?.phone_number_id
-    || process.env.WA_PHONE_NUMBER_ID;
-  const accessToken = process.env.WA_ACCESS_TOKEN;
-
-  const url = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;
+  const phoneNumberId = client?.whatsapp?.phone_number_id || botNumber;
+  const accessToken   = process.env.WA_ACCESS_TOKEN;
+  const url           = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;
 
   const response = await fetch(url, {
     method:  "POST",
@@ -110,5 +166,5 @@ async function sendWhatsAppMessage(botNumber, to, text, client) {
   return response.json();
 }
 
-module.exports = router;
 router.sendWhatsAppMessage = sendWhatsAppMessage;
+module.exports = router;

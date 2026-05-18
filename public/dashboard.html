@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hydra Tech — Broadcast Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #060810; --surface: #0c0f1a; --card: #0f1420; --border: #1a2235;
+    --blue: #00aaff; --blue-bright: #33ccff; --blue-dim: #0066aa;
+    --blue-glow: rgba(0,170,255,0.10); --text: #e0eeff; --muted: #5a7a9a;
+    --accent: #00ffcc; --green: #22c55e; --red: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Rajdhani', sans-serif; font-weight: 500; min-height: 100vh; padding-bottom: 60px; }
+  body::before { content: ''; position: fixed; inset: 0; background-image: linear-gradient(rgba(0,170,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(0,170,255,0.025) 1px, transparent 1px); background-size: 40px 40px; pointer-events: none; z-index: 0; }
+  .wrap { position: relative; z-index: 1; max-width: 800px; margin: 0 auto; padding: 0 20px; }
+  header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bottom: 32px; }
+  .logo { font-family: 'Orbitron', monospace; font-weight: 900; font-size: 20px; color: var(--blue-bright); text-shadow: 0 0 20px rgba(0,170,255,0.5); }
+  .logo span { color: #fff; }
+  header p { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 24px; margin-bottom: 20px; }
+  .card-title { font-family: 'Orbitron', monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--blue); margin-bottom: 16px; }
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .field input, .field select, .field textarea {
+    width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-family: 'Rajdhani', sans-serif; font-size: 15px; font-weight: 500;
+    padding: 11px 14px; outline: none; transition: border-color 0.2s;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--blue-dim); }
+  .field textarea { resize: vertical; min-height: 120px; line-height: 1.5; }
+  .field select option { background: #0f1420; }
+  .field-hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  @media(max-width:600px) { .stats-grid { grid-template-columns: repeat(2,1fr); } }
+  .stat-box { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-align: center; cursor: pointer; transition: all 0.2s; }
+  .stat-box:hover { border-color: var(--blue-dim); background: var(--blue-glow); }
+  .stat-box.selected { border-color: var(--blue); background: var(--blue-glow); }
+  .stat-num { font-family: 'Orbitron', monospace; font-size: 28px; font-weight: 900; color: var(--blue-bright); }
+  .stat-label { font-size: 12px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .preview-box { background: #1a2a1a; border: 1px solid #2a4a2a; border-radius: 8px; padding: 16px; margin: 16px 0; font-size: 14px; line-height: 1.7; color: #90d890; white-space: pre-wrap; min-height: 60px; }
+  .preview-label { font-size: 11px; color: var(--muted); margin-bottom: 8px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .btn { display: block; width: 100%; padding: 14px; border-radius: 6px; font-family: 'Orbitron', monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-align: center; text-transform: uppercase; cursor: pointer; transition: all 0.2s; border: none; margin-top: 8px; }
+  .btn-send { background: linear-gradient(135deg, #00884a, #00ffcc); color: #000; box-shadow: 0 4px 20px rgba(0,255,200,0.2); }
+  .btn-send:hover { box-shadow: 0 6px 30px rgba(0,255,200,0.4); transform: translateY(-1px); }
+  .btn-send:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .btn-load { background: transparent; border: 1px solid var(--border); color: var(--muted); margin-bottom: 20px; }
+  .btn-load:hover { border-color: var(--blue-dim); color: var(--blue-bright); }
+  .result-box { border-radius: 8px; padding: 16px; margin-top: 16px; font-size: 14px; line-height: 1.7; display: none; }
+  .result-box.success { background: rgba(0,255,200,0.08); border: 1px solid rgba(0,255,200,0.3); color: var(--accent); }
+  .result-box.error { background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.3); color: var(--red); }
+  .history-item { border-bottom: 1px solid var(--border); padding: 14px 0; font-size: 13px; }
+  .history-item:last-child { border-bottom: none; }
+  .history-meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+  .badge-all { background: rgba(0,170,255,0.15); color: var(--blue-bright); }
+  .badge-last30 { background: rgba(0,255,200,0.12); color: var(--accent); }
+  .badge-repeat { background: rgba(251,191,36,0.15); color: #fbbf24; }
+  .badge-new { background: rgba(34,197,94,0.15); color: var(--green); }
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(0,0,0,0.3); border-top-color: #000; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .wa-tip { background: rgba(37,211,102,0.08); border: 1px solid rgba(37,211,102,0.3); border-radius: 8px; padding: 14px 16px; font-size: 13px; color: #4ade80; line-height: 1.7; margin-bottom: 20px; }
+  .wa-tip strong { color: #86efac; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">HYDRA<span>TECH</span></div>
+    <p>Broadcast Dashboard — Send messages to your customers</p>
+  </header>
+
+  <!-- AUTH -->
+  <div class="card" id="auth-card">
+    <div class="card-title">// Login</div>
+    <div class="field">
+      <label>Railway API URL</label>
+      <input type="text" id="api-url" placeholder="https://hydra-chatbot-production.up.railway.app">
+    </div>
+    <div class="field">
+      <label>Broadcast API Key</label>
+      <input type="password" id="api-key" placeholder="Your BROADCAST_API_KEY">
+    </div>
+    <div class="field">
+      <label>Client WhatsApp Number</label>
+      <input type="text" id="client-number" placeholder="+254118612755">
+    </div>
+    <button class="btn btn-load" onclick="loadStats()">Load Customer Stats →</button>
+    <div id="auth-result"></div>
+  </div>
+
+  <!-- STATS -->
+  <div id="stats-section" style="display:none">
+    <div class="card-title" style="margin-bottom:12px;">// Customer Segments</div>
+    <div class="stats-grid">
+      <div class="stat-box selected" onclick="selectFilter('all', this)">
+        <div class="stat-num" id="stat-all">—</div>
+        <div class="stat-label">All Customers</div>
+      </div>
+      <div class="stat-box" onclick="selectFilter('last30', this)">
+        <div class="stat-num" id="stat-last30">—</div>
+        <div class="stat-label">Last 30 Days</div>
+      </div>
+      <div class="stat-box" onclick="selectFilter('repeat', this)">
+        <div class="stat-num" id="stat-repeat">—</div>
+        <div class="stat-label">Repeat Buyers</div>
+      </div>
+      <div class="stat-box" onclick="selectFilter('new', this)">
+        <div class="stat-num" id="stat-new">—</div>
+        <div class="stat-label">New Customers</div>
+      </div>
+    </div>
+
+    <!-- COMPOSE -->
+    <div class="card">
+      <div class="card-title">// Compose Broadcast</div>
+
+      <div class="field">
+        <label>Message</label>
+        <textarea id="broadcast-message" placeholder="🥩 Friday Special! Beef at KES 550/kg today only.&#10;&#10;Order now and get free delivery on orders above KES 1,000!&#10;&#10;Reply to this message to order 😊" oninput="updatePreview()"></textarea>
+        <div class="field-hint">Use {name} to personalise — e.g. "Hi {name}! We have a special for you today 🎉"</div>
+      </div>
+
+      <div class="preview-label">Preview (how it looks to customers):</div>
+      <div class="preview-box" id="preview-box">Your message will appear here...</div>
+
+      <div id="send-target" style="font-size:13px;color:var(--muted);margin-bottom:12px;">
+        Sending to: <strong id="send-count" style="color:var(--blue-bright)">—</strong> customers
+      </div>
+
+      <button class="btn btn-send" id="send-btn" onclick="sendBroadcast()">
+        📢 Send Broadcast
+      </button>
+      <div class="result-box" id="send-result"></div>
+    </div>
+
+    <!-- WHATSAPP TIP -->
+    <div class="wa-tip">
+      <strong>💡 Send from WhatsApp instead:</strong><br>
+      Message your bot number from the manager phone:<br><br>
+      <code>BROADCAST ALL: your message here</code><br>
+      <code>BROADCAST LAST30: Friday special! Beef KES 550/kg</code><br>
+      <code>BROADCAST REPEAT: Hi {name}! You're a valued regular 🌟</code><br><br>
+      Type <code>STATS</code> to see customer counts anytime.
+    </div>
+
+    <!-- HISTORY -->
+    <div class="card">
+      <div class="card-title">// Broadcast History</div>
+      <div id="history-list"><div style="color:var(--muted);font-size:13px;">No broadcasts sent yet.</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let selectedFilter = "all";
+  let statsData      = {};
+  let apiUrl         = "";
+  let apiKey         = "";
+  let clientNumber   = "";
+
+  function selectFilter(filter, el) {
+    selectedFilter = filter;
+    document.querySelectorAll(".stat-box").forEach(b => b.classList.remove("selected"));
+    el.classList.add("selected");
+    updateSendCount();
+  }
+
+  function updateSendCount() {
+    const count = statsData[selectedFilter] || 0;
+    document.getElementById("send-count").textContent = count;
+  }
+
+  function updatePreview() {
+    const msg     = document.getElementById("broadcast-message").value;
+    const preview = msg.replace(/{name}/g, "John") || "Your message will appear here...";
+    document.getElementById("preview-box").textContent = preview;
+  }
+
+  async function loadStats() {
+    apiUrl       = document.getElementById("api-url").value.trim().replace(/\/$/, "");
+    apiKey       = document.getElementById("api-key").value.trim();
+    clientNumber = document.getElementById("client-number").value.trim();
+
+    if (!apiUrl || !apiKey || !clientNumber) {
+      showAuthResult("Please fill in all fields", "error");
+      return;
+    }
+
+    try {
+      showAuthResult("Loading...", "info");
+      const res  = await fetch(`${apiUrl}/broadcast/stats?clientNumber=${encodeURIComponent(clientNumber)}&apiKey=${encodeURIComponent(apiKey)}`);
+      const data = await res.json();
+
+      if (!data.success) {
+        showAuthResult(data.message || "Failed to load stats", "error");
+        return;
+      }
+
+      statsData = data.stats;
+      document.getElementById("stat-all").textContent    = data.stats.all;
+      document.getElementById("stat-last30").textContent = data.stats.last30;
+      document.getElementById("stat-repeat").textContent = data.stats.repeat;
+      document.getElementById("stat-new").textContent    = data.stats.new;
+
+      document.getElementById("stats-section").style.display = "block";
+      document.getElementById("auth-card").style.display     = "none";
+      updateSendCount();
+      loadHistory();
+
+    } catch (e) {
+      showAuthResult(`Error: ${e.message}`, "error");
+    }
+  }
+
+  async function sendBroadcast() {
+    const message = document.getElementById("broadcast-message").value.trim();
+    if (!message) {
+      showSendResult("Please enter a message", "error");
+      return;
+    }
+
+    const count = statsData[selectedFilter] || 0;
+    if (count === 0) {
+      showSendResult("No customers in this segment", "error");
+      return;
+    }
+
+    if (!confirm(`Send to ${count} customers?`)) return;
+
+    const btn = document.getElementById("send-btn");
+    btn.disabled   = true;
+    btn.innerHTML  = '<span class="spinner"></span>Sending...';
+
+    try {
+      const res = await fetch(`${apiUrl}/broadcast/send`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ clientNumber, message, filter: selectedFilter, apiKey }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        showSendResult(`✅ Broadcast started! Sending to ${count} customers in the background.`, "success");
+        setTimeout(loadHistory, 5000);
+      } else {
+        showSendResult(`❌ ${data.message}`, "error");
+      }
+
+    } catch (e) {
+      showSendResult(`❌ Error: ${e.message}`, "error");
+    } finally {
+      btn.disabled  = false;
+      btn.innerHTML = "📢 Send Broadcast";
+    }
+  }
+
+  async function loadHistory() {
+    try {
+      const res  = await fetch(`${apiUrl}/broadcast/history?apiKey=${encodeURIComponent(apiKey)}`);
+      const data = await res.json();
+      const list = document.getElementById("history-list");
+
+      if (!data.success || data.history.length === 0) {
+        list.innerHTML = '<div style="color:var(--muted);font-size:13px;">No broadcasts sent yet.</div>';
+        return;
+      }
+
+      list.innerHTML = data.history.map(h => `
+        <div class="history-item">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <strong style="font-size:14px;">${h.businessName}</strong>
+            <span class="badge badge-${h.filter}">${h.filter}</span>
+          </div>
+          <div style="margin:6px 0;font-size:13px;color:var(--text);">"${h.message.slice(0, 80)}${h.message.length > 80 ? "..." : ""}"</div>
+          <div class="history-meta">
+            ✅ ${h.result?.sent || 0} sent &nbsp;•&nbsp; ❌ ${h.result?.failed || 0} failed &nbsp;•&nbsp;
+            ${new Date(h.sentAt).toLocaleString("en-KE")}
+          </div>
+        </div>
+      `).join("");
+    } catch (e) {
+      console.error("History load error:", e);
+    }
+  }
+
+  function showAuthResult(msg, type) {
+    const el = document.getElementById("auth-result");
+    el.style.cssText = `margin-top:12px;padding:12px;border-radius:6px;font-size:13px;background:${type === "error" ? "rgba(248,113,113,0.1)" : "rgba(0,170,255,0.1)"};border:1px solid ${type === "error" ? "rgba(248,113,113,0.3)" : "rgba(0,170,255,0.3)"};color:${type === "error" ? "#f87171" : "#33ccff"}`;
+    el.textContent = msg;
+  }
+
+  function showSendResult(msg, type) {
+    const el = document.getElementById("send-result");
+    el.style.display = "block";
+    el.className     = `result-box ${type}`;
+    el.textContent   = msg;
+  }
+</script>
+</body>
+</html>
