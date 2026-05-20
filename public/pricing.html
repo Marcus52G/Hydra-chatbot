@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hydra Tech — WhatsApp Bot Pricing</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #060810;
+    --surface: #0c0f1a;
+    --card: #0f1420;
+    --border: #1a2235;
+    --blue: #00aaff;
+    --blue-bright: #33ccff;
+    --blue-dim: #0066aa;
+    --blue-glow: rgba(0,170,255,0.12);
+    --blue-glow-strong: rgba(0,170,255,0.25);
+    --text: #e0eeff;
+    --muted: #5a7a9a;
+    --accent: #00ffcc;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 500;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,170,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,170,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    top: -200px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 500px;
+    background: radial-gradient(ellipse, rgba(0,150,255,0.08) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .wrap { position: relative; z-index: 1; max-width: 1000px; margin: 0 auto; padding: 0 24px; }
+  nav {
+    position: relative;
+    z-index: 10;
+    padding: 24px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  nav .wrap { display: flex; align-items: center; justify-content: space-between; }
+  .logo-text {
+    font-family: 'Orbitron', monospace;
+    font-weight: 900;
+    font-size: 20px;
+    color: var(--blue-bright);
+    letter-spacing: 0.05em;
+    text-shadow: 0 0 20px rgba(0,170,255,0.6);
+  }
+  .logo-text span { color: #fff; }
+  .nav-cta {
+    background: transparent;
+    border: 1px solid var(--blue);
+    color: var(--blue-bright);
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 8px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+  }
+  .nav-cta:hover { background: var(--blue-glow); box-shadow: 0 0 20px var(--blue-glow-strong); }
+  .hero { text-align: center; padding: 80px 0 60px; }
+  .hero-eyebrow {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--blue);
+    margin-bottom: 20px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 0.1s;
+  }
+  .hero h1 {
+    font-family: 'Orbitron', monospace;
+    font-weight: 900;
+    font-size: clamp(32px, 6vw, 60px);
+    line-height: 1.05;
+    color: #fff;
+    margin-bottom: 16px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 0.25s;
+  }
+  .hero h1 .hl { color: var(--blue-bright); text-shadow: 0 0 30px rgba(0,170,255,0.5); }
+  .hero-sub {
+    font-size: 18px;
+    color: var(--muted);
+    max-width: 560px;
+    margin: 0 auto 40px;
+    line-height: 1.6;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 0.4s;
+  }
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0,255,200,0.08);
+    border: 1px solid rgba(0,255,200,0.3);
+    border-radius: 100px;
+    padding: 8px 20px;
+    font-size: 13px;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 0.55s;
+  }
+  .works-for { padding: 48px 0; text-align: center; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .works-label { font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--muted); margin-bottom: 24px; }
+  .biz-tags { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+  .biz-tag {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    transition: all 0.2s;
+  }
+  .biz-tag:hover { border-color: var(--blue-dim); color: var(--blue-bright); background: var(--blue-glow); }
+  .section-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--blue);
+    margin-bottom: 12px;
+  }
+  .section-heading {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(20px, 3vw, 28px);
+    font-weight: 900;
+    color: #fff;
+    margin-bottom: 40px;
+    line-height: 1.2;
+  }
+  .offer-section { padding: 72px 0; }
+  .timeline { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; margin-bottom: 24px; }
+  @media(max-width:600px){ .timeline { grid-template-columns: 1fr; } }
+  .t-step {
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 28px 24px;
+    text-align: center;
+  }
+  .t-step:first-child { border-radius: 10px 0 0 10px; }
+  .t-step:last-child { border-radius: 0 10px 10px 0; }
+  @media(max-width:600px){ .t-step:first-child { border-radius: 10px 10px 0 0; } .t-step:last-child { border-radius: 0 0 10px 10px; } }
+  .t-step.highlight { border-color: var(--blue-dim); background: linear-gradient(135deg,#0a1525 0%,var(--card) 100%); box-shadow: 0 0 40px var(--blue-glow); }
+  .t-num { font-family: 'Orbitron', monospace; font-size: 11px; letter-spacing: 0.15em; color: var(--muted); margin-bottom: 12px; }
+  .t-month { font-family: 'Orbitron', monospace; font-size: 18px; font-weight: 900; color: #fff; margin-bottom: 8px; }
+  .t-price { font-family: 'Orbitron', monospace; font-size: 32px; font-weight: 900; margin-bottom: 6px; }
+  .t-price.free { color: var(--accent); text-shadow: 0 0 20px rgba(0,255,200,0.4); }
+  .t-price.half { color: var(--blue-bright); }
+  .t-price.full { color: var(--blue-bright); }
+  .t-desc { font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .pricing-section { padding: 0 0 80px; }
+  .plans { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+  @media(max-width:640px){ .plans { grid-template-columns: 1fr; } }
+  .plan { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; transition: transform 0.3s, box-shadow 0.3s; }
+  .plan:hover { transform: translateY(-4px); box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
+  .plan.pro { border-color: var(--blue-dim); box-shadow: 0 0 50px var(--blue-glow); }
+  .plan-header { padding: 28px 28px 20px; border-bottom: 1px solid var(--border); }
+  .plan-badge { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; padding: 4px 10px; border-radius: 4px; margin-bottom: 14px; }
+  .plan-badge.starter { background: rgba(90,120,160,0.2); color: var(--muted); border: 1px solid var(--border); }
+  .plan-badge.smart { background: rgba(0,170,255,0.15); color: var(--blue-bright); border: 1px solid var(--blue-dim); }
+  .plan-name { font-family: 'Orbitron', monospace; font-size: 22px; font-weight: 900; color: #fff; margin-bottom: 6px; }
+  .plan-tagline { font-size: 14px; color: var(--muted); margin-bottom: 20px; }
+  .plan-price { display: flex; align-items: baseline; gap: 6px; }
+  .plan-price .kes { font-size: 18px; font-weight: 700; color: var(--muted); }
+  .plan-price .amount { font-family: 'Orbitron', monospace; font-size: 40px; font-weight: 900; color: #fff; }
+  .plan-price .period { font-size: 13px; color: var(--muted); }
+  .plan-body { padding: 24px 28px 28px; }
+  .feat-list { list-style: none; }
+  .feat-list li { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0; font-size: 15px; font-weight: 500; border-bottom: 1px solid rgba(26,34,53,0.6); line-height: 1.4; }
+  .feat-list li:last-child { border-bottom: none; }
+  .feat-list li .icon { font-size: 15px; margin-top: 1px; flex-shrink: 0; }
+  .feat-list li .good { color: var(--accent); }
+  .feat-list li .hi { color: var(--blue-bright); }
+  .feat-list li .no { color: #f87171; }
+  .plan-cta { display: block; width: 100%; margin-top: 24px; padding: 14px; border-radius: 6px; font-family: 'Orbitron', monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-align: center; text-decoration: none; text-transform: uppercase; cursor: pointer; transition: all 0.2s; border: none; }
+  .plan-cta.starter-cta { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .plan-cta.starter-cta:hover { border-color: var(--blue-dim); color: var(--blue-bright); background: var(--blue-glow); }
+  .plan-cta.smart-cta { background: linear-gradient(135deg,#0055aa,#00aaff); color: #fff; box-shadow: 0 4px 20px rgba(0,150,255,0.3); }
+  .plan-cta.smart-cta:hover { box-shadow: 0 6px 30px rgba(0,170,255,0.5); transform: translateY(-1px); }
+  .compare-section { padding: 0 0 80px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  thead th { font-family: 'Orbitron', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; padding: 14px 20px; text-align: left; background: var(--surface); border-bottom: 2px solid var(--border); color: var(--muted); }
+  thead th.col-pro { color: var(--blue-bright); }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.15s; }
+  tbody tr:hover { background: rgba(0,100,170,0.04); }
+  tbody td { padding: 13px 20px; font-size: 14px; font-weight: 500; }
+  tbody td:first-child { color: var(--muted); }
+  .yes { color: var(--accent); font-weight: 700; }
+  .no-val { color: #f87171; }
+  .partial { color: #fbbf24; }
+  .faq-section { padding: 0 0 80px; }
+  .faq-item { border: 1px solid var(--border); border-radius: 8px; padding: 20px 24px; margin-bottom: 12px; background: var(--card); transition: border-color 0.2s; }
+  .faq-item:hover { border-color: var(--blue-dim); }
+  .faq-q { font-family: 'Orbitron', monospace; font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 10px; }
+  .faq-a { font-size: 14px; color: var(--muted); line-height: 1.7; }
+  .footer-cta { text-align: center; padding: 72px 0; border-top: 1px solid var(--border); }
+  .footer-cta h2 { font-family: 'Orbitron', monospace; font-size: clamp(22px,4vw,36px); font-weight: 900; color: #fff; margin-bottom: 16px; }
+  .footer-cta p { font-size: 16px; color: var(--muted); margin-bottom: 32px; }
+  .wa-btn { display: inline-flex; align-items: center; gap: 10px; background: #25D366; color: #fff; font-family: 'Orbitron', monospace; font-size: 14px; font-weight: 700; letter-spacing: 0.06em; padding: 16px 36px; border-radius: 8px; text-decoration: none; transition: all 0.2s; box-shadow: 0 4px 20px rgba(37,211,102,0.3); }
+  .wa-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(37,211,102,0.5); }
+  footer { text-align: center; padding: 24px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--border); letter-spacing: 0.05em; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+  .scan-line { position: fixed; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--blue), transparent); animation: scan 4s ease-in-out infinite; pointer-events: none; z-index: 100; opacity: 0.4; }
+  @keyframes scan { 0% { top: 0; opacity: 0; } 10% { opacity: 0.4; } 90% { opacity: 0.4; } 100% { top: 100vh; opacity: 0; } }
+</style>
+</head>
+<body>
+<div class="scan-line"></div>
+
+<nav>
+  <div class="wrap">
+    <div class="logo-text">HYDRA<span>TECH</span></div>
+    <a href="https://wa.me/254794836505" class="nav-cta">Get Started →</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="wrap">
+    <p class="hero-eyebrow">WhatsApp Automation for Kenyan Businesses</p>
+    <h1>Your Business.<br><span class="hl">Always Online.</span></h1>
+    <p class="hero-sub">Hydra Chatbot handles customer orders, inquiries & follow-ups on WhatsApp — 24/7, automatically. No staff needed after hours.</p>
+    <div class="hero-badge">🎁 2 Months Free Offer — Limited Slots Available</div>
+  </div>
+</section>
+
+<section class="works-for">
+  <div class="wrap">
+    <p class="works-label">Works for any business that gets WhatsApp messages</p>
+    <div class="biz-tags">
+      <span class="biz-tag">🥩 Butcheries</span>
+      <span class="biz-tag">🛒 Retail Shops</span>
+      <span class="biz-tag">🍕 Restaurants & Takeaways</span>
+      <span class="biz-tag">💊 Pharmacies</span>
+      <span class="biz-tag">🚚 Delivery Services</span>
+      <span class="biz-tag">👗 Fashion & Boutiques</span>
+      <span class="biz-tag">🏠 Real Estate Agents</span>
+      <span class="biz-tag">💇 Salons & Spas</span>
+      <span class="biz-tag">🏋️ Gyms & Fitness</span>
+      <span class="biz-tag">+ Any Business</span>
+    </div>
+  </div>
+</section>
+
+<section class="offer-section">
+  <div class="wrap">
+    <p class="section-title">// Limited Time Offer</p>
+    <h2 class="section-heading">2 Months Free.<br>Keep Only If You Love It.</h2>
+    <div class="timeline">
+      <div class="t-step highlight">
+        <div class="t-num">MONTH 01</div>
+        <div class="t-month">Completely Free</div>
+        <div class="t-price free">KES 0</div>
+        <div class="t-desc">Full setup, full features, zero commitment. See your bot live on WhatsApp.</div>
+      </div>
+      <div class="t-step">
+        <div class="t-num">MONTH 02</div>
+        <div class="t-month">Half Price</div>
+        <div class="t-price half">50% OFF</div>
+        <div class="t-desc">You're already seeing results. Pay half to keep running through month 2.</div>
+      </div>
+      <div class="t-step">
+        <div class="t-num">MONTH 03+</div>
+        <div class="t-month">Full Plan</div>
+        <div class="t-price full">Your Rate</div>
+        <div class="t-desc">Full subscription. Cancel anytime — no long contracts, no penalties.</div>
+      </div>
+    </div>
+    <p style="font-size:13px;color:var(--muted);text-align:center;">No credit card required to start · Setup takes less than 24 hours</p>
+  </div>
+</section>
+
+<section class="pricing-section">
+  <div class="wrap">
+    <p class="section-title">// Choose Your Plan</p>
+    <h2 class="section-heading">Simple. Transparent. Pricing.</h2>
+    <div class="plans">
+      <div class="plan">
+        <div class="plan-header">
+          <span class="plan-badge starter">Starter</span>
+          <div class="plan-name">Hydra Basic</div>
+          <div class="plan-tagline">Automated ordering, no AI required</div>
+          <div class="plan-price">
+            <span class="kes">KES</span>
+            <span class="amount">1,500</span>
+            <span class="period">/ month</span>
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-top:8px;">+ KES 500 setup fee (waived month 1)</div>
+        </div>
+        <div class="plan-body">
+          <ul class="feat-list">
+            <li><span class="icon good">✓</span> WhatsApp order taking — 24/7</li>
+            <li><span class="icon good">✓</span> Fixed menu with product prices</li>
+            <li><span class="icon good">✓</span> Auto-reply to common questions</li>
+            <li><span class="icon good">✓</span> Order confirmation messages</li>
+            <li><span class="icon good">✓</span> Business hours & location info</li>
+            <li><span class="icon good">✓</span> Setup & onboarding included</li>
+            <li><span class="icon no">✗</span> No AI understanding of free text</li>
+            <li><span class="icon no">✗</span> No customer order history</li>
+          </ul>
+          <a href="https://wa.me/254794836505?text=Hi%20Hydra%20Tech%2C%20I%27m%20interested%20in%20the%20Basic%20plan" class="plan-cta starter-cta">Start Free Trial</a>
+        </div>
+      </div>
+      <div class="plan pro">
+        <div class="plan-header">
+          <span class="plan-badge smart">⚡ Smart AI</span>
+          <div class="plan-name">Hydra Smart</div>
+          <div class="plan-tagline">AI-powered — feels like a real assistant</div>
+          <div class="plan-price">
+            <span class="kes">KES</span>
+            <span class="amount">3,000</span>
+            <span class="period">/ month</span>
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-top:8px;">+ KES 500 setup fee (waived month 1)</div>
+        </div>
+        <div class="plan-body">
+          <ul class="feat-list">
+            <li><span class="icon good">✓</span> Everything in Hydra Basic</li>
+            <li><span class="icon hi">⚡</span> AI understands natural language messages</li>
+            <li><span class="icon hi">⚡</span> Remembers each customer's order history</li>
+            <li><span class="icon hi">⚡</span> Smart product recommendations</li>
+            <li><span class="icon hi">⚡</span> Handles complaints & special requests</li>
+            <li><span class="icon hi">⚡</span> Personalised customer experience</li>
+            <li><span class="icon good">✓</span> Priority support</li>
+            <li><span class="icon good">✓</span> Monthly performance report</li>
+          </ul>
+          <a href="https://wa.me/254794836505?text=Hi%20Hydra%20Tech%2C%20I%27m%20interested%20in%20the%20Smart%20plan" class="plan-cta smart-cta">Get Smart Bot Free</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="compare-section">
+  <div class="wrap">
+    <p class="section-title">// Full Feature Breakdown</p>
+    <h2 class="section-heading">What's Included in Each Plan</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th>Hydra Basic</th>
+          <th class="col-pro">Hydra Smart ⚡</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>24/7 WhatsApp availability</td><td class="yes">✓ Yes</td><td class="yes">✓ Yes</td></tr>
+        <tr><td>Automated order taking</td><td class="yes">✓ Yes</td><td class="yes">✓ Yes</td></tr>
+        <tr><td>Fixed menu replies</td><td class="yes">✓ Yes</td><td class="yes">✓ Yes</td></tr>
+        <tr><td>Business info & hours</td><td class="yes">✓ Yes</td><td class="yes">✓ Yes</td></tr>
+        <tr><td>Order confirmations</td><td class="yes">✓ Yes</td><td class="yes">✓ Yes</td></tr>
+        <tr><td>Understands free-text messages</td><td class="no-val">✗ No</td><td class="yes">✓ Yes (AI)</td></tr>
+        <tr><td>Remembers customer history</td><td class="no-val">✗ No</td><td class="yes">✓ Yes</td></tr>
+        <tr><td>Smart recommendations</td><td class="no-val">✗ No</td><td class="yes">✓ Yes</td></tr>
+        <tr><td>Handles complaints</td><td class="partial">Basic</td><td class="yes">✓ Advanced</td></tr>
+        <tr><td>Monthly report</td><td class="no-val">✗ No</td><td class="yes">✓ Yes</td></tr>
+        <tr><td>Setup & onboarding</td><td class="yes">✓ Included</td><td class="yes">✓ Included</td></tr>
+        <tr><td>Month 1 price</td><td class="yes">FREE</td><td class="yes">FREE</td></tr>
+        <tr><td>Month 2 price</td><td style="color:var(--blue-bright)">KES 750</td><td style="color:var(--blue-bright)">KES 1,500</td></tr>
+        <tr><td>Month 3+ price</td><td>KES 1,500 / mo</td><td style="color:var(--blue-bright)">KES 3,000 / mo</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="faq-section">
+  <div class="wrap">
+    <p class="section-title">// Common Questions</p>
+    <h2 class="section-heading">Answers To What You're Thinking</h2>
+    <div class="faq-item">
+      <div class="faq-q">How quickly can my bot go live?</div>
+      <div class="faq-a">Within 24 hours of signing up. We handle the full setup — you just share your menu/products and business details with us.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Do I need to buy any equipment or software?</div>
+      <div class="faq-a">No. You just need your existing WhatsApp Business number. We handle everything technical on our end.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">What if a customer asks something the bot can't handle?</div>
+      <div class="faq-a">The bot politely notifies the customer and escalates to you directly. You stay in full control of edge cases.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Can I cancel anytime?</div>
+      <div class="faq-a">Yes — no long-term contracts. If you cancel, your bot stops at the end of the billing month. No penalties, no questions asked.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">What's the real difference between Basic and Smart?</div>
+      <div class="faq-a">Basic: customers follow a set menu (press 1 for orders, 2 for prices). Smart: customers type naturally — "niambie bei ya chicken" — and the bot understands, responds, and remembers them next time.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Can I upgrade from Basic to Smart later?</div>
+      <div class="faq-a">Absolutely. Many clients start on Basic to experience automation, then upgrade to Smart once they see orders flowing in automatically.</div>
+    </div>
+  </div>
+</section>
+
+<section class="footer-cta">
+  <div class="wrap">
+    <h2>Ready to Put Your<br>Business on Autopilot?</h2>
+    <p>Join businesses across Kenya running 24/7 on WhatsApp with Hydra Tech.</p>
+    <a href="https://wa.me/254794836505?text=Hi%2C%20I%27d%20like%20to%20try%20Hydra%20Chatbot%20for%20my%20business" class="wa-btn">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+      Chat With Us on WhatsApp
+    </a>
+  </div>
+</section>
+
+<footer>© 2026 Hydra Tech · WhatsApp Automation for Kenyan Businesses · Built in Nairobi 🇰🇪</footer>
+</body>
+</html>
