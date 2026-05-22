@@ -1,11 +1,11 @@
 // ============================================================
-// services/messageHandler.js  (PHASE 2 — M-PESA VERSION)
+// services/messageHandler.js  (PLAN ENFORCEMENT VERSION)
 // ============================================================
 // WHAT'S NEW:
-//   ✅ After order confirmed → ask for M-Pesa number
-//   ✅ Send STK Push to customer
-//   ✅ Bot tells customer to check phone and enter PIN
-//   ✅ Payment callback handled by routes/mpesa.js
+//   ✅ Basic plan — no AI, numbered menu only
+//   ✅ Smart plan — full AI, customer memory, natural language
+//   ✅ Plan check on every AI entry point
+//   ✅ Upsell message shown to Basic clients hitting AI features
 // ============================================================
 
 const { getSession, setState, resetSession, STATES } = require("./stateManager");
@@ -16,6 +16,22 @@ const { v4: uuidv4 }                                  = require("uuid");
 
 function typingDelay(ms = 1200) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ── PLAN CHECKER ───────────────────────────────────────────
+function isSmartPlan(client) {
+  return client.plan === "smart";
+}
+
+function upsellMessage(client) {
+  return `⚡ *This feature is available on Hydra Smart only.*\n\n` +
+    `Hydra Smart includes:\n` +
+    `• AI that understands any message\n` +
+    `• Remembers your customers\n` +
+    `• Handles complaints naturally\n\n` +
+    `Upgrade for KES 3,000/mo — contact us:\n` +
+    `📞 ${client.business.phone || "Hydra Tech"}\n\n` +
+    `Type *menu* to go back.`;
 }
 
 // ── MAIN HANDLER ───────────────────────────────────────────
@@ -42,17 +58,23 @@ async function handleMessage(phone, message, client) {
   if (state === STATES.HUMAN_HANDOFF) return null;
 
   // ── STATE MACHINE ─────────────────────────────────────
-
-  if (state === STATES.IDLE)          return buildMainMenu(client, phone, clientNo);
-  if (state === "MAIN_MENU")          return handleMainMenuSelection(phone, input, client, clientNo);
-  if (state === "SELECTING_PRODUCT")  return handleProductSelection(phone, input, client, clientNo);
-  if (state === "ENTERING_QUANTITY")  return handleQuantityInput(phone, input, client);
-  if (state === STATES.AWAITING_TYPE) return handleDeliveryType(phone, input, client);
+  if (state === STATES.IDLE)              return buildMainMenu(client, phone, clientNo);
+  if (state === "MAIN_MENU")              return handleMainMenuSelection(phone, input, client, clientNo);
+  if (state === "SELECTING_PRODUCT")      return handleProductSelection(phone, input, client, clientNo);
+  if (state === "ENTERING_QUANTITY")      return handleQuantityInput(phone, input, client);
+  if (state === STATES.AWAITING_TYPE)     return handleDeliveryType(phone, input, client);
   if (state === STATES.AWAITING_LOCATION) return handleLocationInput(phone, input, client);
-  if (state === STATES.AWAITING_NAME) return handleNameInput(phone, input, client, clientNo);
+  if (state === STATES.AWAITING_NAME)     return handleNameInput(phone, input, client, clientNo);
   if (state === STATES.AWAITING_CONFIRM)  return handleConfirmation(phone, input, client, clientNo);
-  if (state === "AWAITING_MPESA")     return handleMpesaNumber(phone, input, client, clientNo);
-  if (state === "AI_QUESTION")        return handleAIQuestion(phone, message, client, clientNo);
+  if (state === "AWAITING_MPESA")         return handleMpesaNumber(phone, input, client, clientNo);
+  if (state === "AI_QUESTION") {
+    // Block AI for Basic plan even if state was somehow set
+    if (!isSmartPlan(client)) {
+      resetSession(phone);
+      return upsellMessage(client);
+    }
+    return handleAIQuestion(phone, message, client, clientNo);
+  }
 
   await typingDelay(600);
   return buildMainMenu(client, phone, clientNo);
@@ -60,12 +82,16 @@ async function handleMessage(phone, message, client) {
 
 // ── BUILD MAIN MENU ────────────────────────────────────────
 async function buildMainMenu(client, phone, clientNo) {
-  const profile  = getCustomer(clientNo, phone);
-  const greeting = buildGreeting(profile, client.business.name);
   await typingDelay(800);
   setState(phone, { state: "MAIN_MENU" });
 
-  const welcomeText = greeting || `👋 Welcome to *${client.business.name}*!`;
+  // Returning customer greeting (Smart only)
+  let welcomeText = `👋 Welcome to *${client.business.name}*!`;
+  if (isSmartPlan(client)) {
+    const profile  = getCustomer(clientNo, phone);
+    const greeting = buildGreeting(profile, client.business.name);
+    if (greeting) welcomeText = greeting;
+  }
 
   return `${welcomeText}\n\n` +
     `What would you like to do?\n\n` +
@@ -86,8 +112,8 @@ async function handleMainMenuSelection(phone, input, client, clientNo) {
     case "1": {
       setState(phone, { state: "MAIN_MENU" });
       const prices = Object.values(client.prices).map(p => {
-        const unitText = p.unit ? `/${p.unit}` : "";
-        return `${p.available ? "✅" : "❌"} ${p.name} — KES ${p.price}${unitText}${!p.available ? " _(unavailable)_" : ""}`;
+        const u = p.unit ? `/${p.unit}` : "";
+        return `${p.available ? "✅" : "❌"} ${p.name} — KES ${p.price}${u}${!p.available ? " _(unavailable)_" : ""}`;
       }).join("\n");
       return `📋 *${client.business.name} — Today's Prices*\n\n${prices}\n\nType *2* to place an order or *menu* to go back 😊`;
     }
@@ -129,6 +155,11 @@ async function handleMainMenuSelection(phone, input, client, clientNo) {
     }
 
     case "5": {
+      // ── PLAN CHECK — Block AI for Basic ─────────────
+      if (!isSmartPlan(client)) {
+        setState(phone, { state: "MAIN_MENU" });
+        return upsellMessage(client);
+      }
       setState(phone, { state: "AI_QUESTION" });
       return `💬 *Ask me anything!*\n\nWhat would you like to know about ${client.business.name}?\n\n_(Type *menu* anytime to go back.)_`;
     }
@@ -138,8 +169,15 @@ async function handleMainMenuSelection(phone, input, client, clientNo) {
       return `👤 *Connecting you to our team...*\n\nSomeone will be with you shortly.\n\nOr call us: *${client.business.phone}*`;
     }
 
-    default:
+    default: {
+      // ── PLAN CHECK — Natural language only for Smart ─
+      if (!isSmartPlan(client)) {
+        return `Please reply with a number from the menu:\n\n` +
+          `1️⃣ View prices\n2️⃣ Place an order\n3️⃣ Delivery info\n` +
+          `4️⃣ Location & hours\n5️⃣ Ask a question\n6️⃣ Talk to someone`;
+      }
       return handleAIQuestion(phone, input, client, clientNo);
+    }
   }
 }
 
@@ -192,7 +230,6 @@ async function handleQuantityInput(phone, input, client) {
 // ── DELIVERY TYPE ──────────────────────────────────────────
 async function handleDeliveryType(phone, input, client) {
   await typingDelay(800);
-
   if (input === "1") {
     setState(phone, { state: STATES.AWAITING_NAME, orderDraft: { ...getSession(phone).orderDraft, deliveryType: "pickup" } });
     return `🏪 *Pickup selected!*\n\nWhat is your name for the order?`;
@@ -204,7 +241,6 @@ async function handleDeliveryType(phone, input, client) {
     setState(phone, { state: STATES.AWAITING_LOCATION, orderDraft: { ...getSession(phone).orderDraft, deliveryType: "delivery" } });
     return `🚚 *Delivery selected!*\n\nPlease enter your delivery location:\n_(e.g. Rongai near Total)_`;
   }
-
   return `Please reply *1* for Pickup or *2* for Delivery 👇`;
 }
 
@@ -221,6 +257,8 @@ async function handleNameInput(phone, input, client, clientNo) {
   const name  = input.trim();
   const draft = getSession(phone).orderDraft;
   setState(phone, { state: STATES.AWAITING_CONFIRM, orderDraft: { ...draft, customerName: name } });
+
+  // Save name to memory (both plans)
   saveCustomer(clientNo, phone, { name });
 
   const qText       = draft.unit ? `${draft.quantity}${draft.unit}` : `${draft.quantity}`;
@@ -246,17 +284,13 @@ async function handleConfirmation(phone, input, client, clientNo) {
     await typingDelay(600);
     return `Order cancelled. No worries! 👋\n\nType *menu* to start again.`;
   }
-
   if (input !== "1") {
     return `Please reply *1* to confirm or *2* to cancel 👇`;
   }
 
   await typingDelay(800);
-
-  // Ask for M-Pesa number
-  const profile      = getCustomer(clientNo, phone);
-  const savedPhone   = profile?.mpesaPhone;
-
+  const profile    = getCustomer(clientNo, phone);
+  const savedPhone = profile?.mpesaPhone;
   setState(phone, { state: "AWAITING_MPESA" });
 
   if (savedPhone) {
@@ -266,20 +300,16 @@ async function handleConfirmation(phone, input, client, clientNo) {
       `2️⃣ Enter a different number\n\n` +
       `Reply with *1* or *2* 👇`;
   }
-
-  return `💳 *M-Pesa Payment*\n\n` +
-    `Please enter the M-Pesa number to pay from:\n_(e.g. 0712345678)_`;
+  return `💳 *M-Pesa Payment*\n\nPlease enter the M-Pesa number to pay from:\n_(e.g. 0712345678)_`;
 }
 
-// ── M-PESA NUMBER INPUT → SEND STK PUSH ───────────────────
+// ── M-PESA NUMBER INPUT ────────────────────────────────────
 async function handleMpesaNumber(phone, input, client, clientNo) {
   await typingDelay(800);
-
   const session = getSession(phone);
   const draft   = session.orderDraft;
   let mpesaPhone;
 
-  // Check if they selected option 1 (use saved number)
   if (input === "1") {
     const profile = getCustomer(clientNo, phone);
     mpesaPhone    = profile?.mpesaPhone;
@@ -291,18 +321,15 @@ async function handleMpesaNumber(phone, input, client, clientNo) {
     setState(phone, { state: "AWAITING_MPESA", awaitingNewPhone: true });
     return `Please enter your M-Pesa number:\n_(e.g. 0712345678)_`;
   } else {
-    // They typed a phone number directly
     mpesaPhone = input.replace(/\s+/g, "");
     if (mpesaPhone.length < 9) {
       return `Please enter a valid M-Pesa number:\n_(e.g. 0712345678)_`;
     }
   }
 
-  // Format and save M-Pesa number
   const formattedPhone = formatPhone(mpesaPhone);
   saveCustomer(clientNo, phone, { mpesaPhone: formattedPhone });
 
-  // Build order object
   const order = {
     id:               uuidv4(),
     customerName:     draft.customerName,
@@ -315,36 +342,21 @@ async function handleMpesaNumber(phone, input, client, clientNo) {
     createdAt:        new Date().toISOString(),
   };
 
-  // Save order
   try {
     const { saveOrder } = require("./clientManager");
     saveOrder(clientNo, order.id, order);
   } catch (e) { console.error("Order save error:", e.message); }
 
-  // Update customer memory
   try {
     addOrderToHistory(clientNo, phone, order);
   } catch (e) { console.error("Memory update error:", e.message); }
 
-  // Send STK Push
   try {
-    const { sendSTKPush }              = require("./mpesaService");
-    const { registerPendingPayment }   = require("../routes/mpesa");
+    const { sendSTKPush }            = require("./mpesaService");
+    const { registerPendingPayment } = require("../routes/mpesa");
 
-    const stkResult = await sendSTKPush(
-      formattedPhone,
-      order.totalPrice,
-      order.id,
-      client.business.name
-    );
-
-    // Register pending payment so callback can find it
-    registerPendingPayment(stkResult.checkoutRequestId, {
-      order,
-      client,
-      customerPhone: phone,
-    });
-
+    const stkResult = await sendSTKPush(formattedPhone, order.totalPrice, order.id, client.business.name);
+    registerPendingPayment(stkResult.checkoutRequestId, { order, client, customerPhone: phone });
     resetSession(phone);
 
     return `💳 *M-Pesa prompt sent!*\n\n` +
@@ -352,22 +364,24 @@ async function handleMpesaNumber(phone, input, client, clientNo) {
       `Order ID: *${order.id.slice(0, 8).toUpperCase()}*\n\n` +
       `⏳ You have 60 seconds to complete payment.\n\n` +
       `📞 Need help? Call: ${client.business.phone}`;
-
   } catch (e) {
     console.error("STK Push error:", e.message);
     resetSession(phone);
-
-    // Fallback — confirm order without payment (STK failed)
     return `⚠️ *M-Pesa prompt could not be sent.*\n\n` +
       `Your order *${order.id.slice(0, 8).toUpperCase()}* has been received.\n` +
-      `Please pay *KES ${order.totalPrice}* on arrival or call us to arrange payment:\n\n` +
-      `📞 ${client.business.phone}\n\n` +
-      `Type *menu* to start a new order.`;
+      `Please pay *KES ${order.totalPrice}* on arrival or call:\n\n` +
+      `📞 ${client.business.phone}\n\nType *menu* to start a new order.`;
   }
 }
 
-// ── AI QUESTION HANDLER ────────────────────────────────────
+// ── AI QUESTION HANDLER (Smart plan only) ─────────────────
 async function handleAIQuestion(phone, message, client, clientNo) {
+  // Double check plan
+  if (!isSmartPlan(client)) {
+    resetSession(phone);
+    return upsellMessage(client);
+  }
+
   await typingDelay(1200);
   const session         = getSession(phone);
   const history         = session.conversationHistory || [];
