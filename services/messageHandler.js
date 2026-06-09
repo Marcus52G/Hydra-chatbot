@@ -359,6 +359,13 @@ async function handleMpesaNumber(phone, input, client, clientNo) {
     registerPendingPayment(stkResult.checkoutRequestId, { order, client, customerPhone: phone });
     resetSession(phone);
 
+    // SMS to manager when order placed
+    try {
+      const { sendOrderSMS } = require("./smsService");
+      const managerPhone = client.whatsapp?.manager_phone || process.env.MANAGER_PHONE;
+      await sendOrderSMS(managerPhone, order, client.business.name);
+    } catch (e) { console.error("Order SMS error:", e.message); }
+
     return `💳 *M-Pesa prompt sent!*\n\n` +
       `Check your phone *${mpesaPhone}* and enter your M-Pesa PIN to pay *KES ${order.totalPrice}*.\n\n` +
       `Order ID: *${order.id.slice(0, 8).toUpperCase()}*\n\n` +
@@ -366,6 +373,15 @@ async function handleMpesaNumber(phone, input, client, clientNo) {
       `📞 Need help? Call: ${client.business.phone}`;
   } catch (e) {
     console.error("STK Push error:", e.message);
+    // SMS alert when payment fails
+    try {
+      const { sendAlertSMS } = require("./smsService");
+      const managerPhone = client.whatsapp?.manager_phone || process.env.MANAGER_PHONE;
+      await sendAlertSMS(
+        managerPhone,
+        `Order received but M-Pesa failed. Call: ${draft.customerName} ${phone}. Order: ${draft.itemName} x${draft.quantity} = KES ${draft.lineTotal}`
+      );
+    } catch (smsE) { console.error("Alert SMS error:", smsE.message); }
     resetSession(phone);
     return `⚠️ *M-Pesa prompt could not be sent.*\n\n` +
       `Your order *${order.id.slice(0, 8).toUpperCase()}* has been received.\n` +

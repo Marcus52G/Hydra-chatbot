@@ -1,13 +1,15 @@
 // ============================================================
-// routes/onboard.js
+// routes/onboard.js  (COMPLETE VERSION — WhatsApp + SMS)
 // ============================================================
 // PURPOSE: Fully automated client onboarding
 //   1. Receives form submission
-//   2. Validates fields
-//   3. Builds client JSON config
-//   4. Saves to clients/ folder
-//   5. Notifies Hydra Tech owner via WhatsApp
-//   6. Sends welcome message to new client
+//   2. Validates required fields
+//   3. Checks for duplicate numbers
+//   4. Builds client JSON config
+//   5. Saves to clients/ folder
+//   6. Reloads into clientManager
+//   7. Notifies YOU via WhatsApp + SMS
+//   8. Sends welcome WhatsApp + SMS to new client
 // ============================================================
 
 const express = require("express");
@@ -22,19 +24,21 @@ router.post("/submit", async (req, res) => {
   try {
     const data = req.body;
 
-    // Validate required fields
+    // ── 1. Validate required fields ────────────────────────
     const required = ["biz_name","owner_name","wa_number","personal_number","biz_type","location"];
     for (const field of required) {
       if (!data[field]?.toString().trim()) {
-        return res.status(400).json({ success: false, message: `Missing required field: ${field}` });
+        return res.status(400).json({
+          success: false,
+          message: `Missing required field: ${field}`,
+        });
       }
     }
 
-    // Format WA number for filename
+    // ── 2. Format and check duplicate ──────────────────────
     const waNumber   = formatPhone(data.wa_number);
     const clientFile = path.join(CLIENTS_DIR, `${waNumber}.json`);
 
-    // Check duplicate
     if (fs.existsSync(clientFile)) {
       return res.status(409).json({
         success: false,
@@ -42,7 +46,7 @@ router.post("/submit", async (req, res) => {
       });
     }
 
-    // Build prices from submitted products
+    // ── 3. Build prices from submitted products ─────────────
     const prices = {};
     (data.products || []).forEach(p => {
       if (!p.name?.trim() || !p.price) return;
@@ -55,13 +59,13 @@ router.post("/submit", async (req, res) => {
       };
     });
 
-    // Build hours string
+    // ── 4. Build hours string ───────────────────────────────
     const days      = data.days || ["Mon","Tue","Wed","Thu","Fri","Sat"];
     const openTime  = data.open_time  || "08:00";
     const closeTime = data.close_time || "20:00";
     const hours     = `${days.join(", ")}: ${formatTime(openTime)} - ${formatTime(closeTime)}`;
 
-    // Build full client config
+    // ── 5. Build full client config ─────────────────────────
     const config = {
       business: {
         name:      data.biz_name.trim(),
@@ -97,46 +101,58 @@ router.post("/submit", async (req, res) => {
       customers:    {},
     };
 
-    // Save file
+    // ── 6. Save config file ─────────────────────────────────
     if (!fs.existsSync(CLIENTS_DIR)) fs.mkdirSync(CLIENTS_DIR, { recursive: true });
     fs.writeFileSync(clientFile, JSON.stringify(config, null, 2), "utf8");
-    console.log(`🎉 New client: ${data.biz_name} (${waNumber})`);
+    console.log(`🎉 New client onboarded: ${data.biz_name} (${waNumber})`);
 
-    // Reload into clientManager
+    // ── 7. Reload into clientManager cache ──────────────────
     try {
       const { reloadClient } = require("../services/clientManager");
       reloadClient(waNumber);
-    } catch (e) { console.log("Reload:", e.message); }
+    } catch (e) { console.log("ClientManager reload:", e.message); }
 
-    // Notify Hydra Tech owner
+    // ── 8. Notify YOU via WhatsApp ──────────────────────────
+    const planLabel = data.plan === "smart"
+      ? "Hydra Smart — KES 3,000/mo"
+      : "Hydra Basic — KES 1,500/mo";
+
     try {
       const { sendWhatsAppMessage } = require("./whatsapp");
       const pid        = process.env.WA_PHONE_NUMBER_ID;
       const ownerPhone = (process.env.MANAGER_PHONE || "").replace("+", "");
 
       if (pid && ownerPhone) {
-        const planLabel = data.plan === "smart"
-          ? "Hydra Smart — KES 3,000/mo"
-          : "Hydra Basic — KES 1,500/mo";
-
         await sendWhatsAppMessage(pid, ownerPhone,
           `🎉 *New Client Onboarded!*\n\n` +
           `🏪 *${data.biz_name}*\n` +
           `👤 Owner: ${data.owner_name}\n` +
-          `📞 WA Number: ${waNumber}\n` +
+          `📞 Bot Number: ${waNumber}\n` +
           `📱 Personal: ${data.personal_number}\n` +
           `📍 Location: ${data.location}\n` +
           `🏷️ Type: ${data.biz_type}\n` +
           `📦 Products: ${Object.keys(prices).length} items\n` +
           `💰 Plan: ${planLabel}\n\n` +
-          `✅ Config saved to clients/${waNumber}.json\n` +
-          `⚡ Set their phone_number_id to activate bot.`,
+          `✅ Config saved: clients/${waNumber}.json\n` +
+          `⚡ Next: register their number on Meta.`,
           { business: { name: "Hydra Tech" }, whatsapp: { phone_number_id: pid } }
         );
+        console.log("✅ Owner WhatsApp notification sent");
       }
-    } catch (e) { console.error("Owner notify error:", e.message); }
+    } catch (e) { console.error("Owner WhatsApp error:", e.message); }
 
-    // Welcome message to new client
+    // ── 9. Notify YOU via SMS (fallback) ────────────────────
+    // Works even if WhatsApp is off or you have no data
+    try {
+      const { sendAlertSMS } = require("../services/smsService");
+      await sendAlertSMS(
+        process.env.MANAGER_PHONE,
+        `NEW CLIENT: ${data.biz_name} (${waNumber}) - ${planLabel}. Check WhatsApp for details.`
+      );
+      console.log("📱 Owner SMS notification sent");
+    } catch (e) { console.error("Owner SMS error:", e.message); }
+
+    // ── 10. Welcome WhatsApp to new client ──────────────────
     try {
       const { sendWhatsAppMessage } = require("./whatsapp");
       const pid         = process.env.WA_PHONE_NUMBER_ID;
@@ -148,16 +164,46 @@ router.post("/submit", async (req, res) => {
           `We have received your setup form for *${data.biz_name}* ✅\n\n` +
           `*What happens next:*\n\n` +
           `1️⃣ We review your details\n` +
-          `2️⃣ Configure your bot within 24hrs\n` +
+          `2️⃣ Configure your bot within 24 hours\n` +
           `3️⃣ Test it live with you\n` +
-          `4️⃣ Go live on your WhatsApp 🚀\n\n` +
+          `4️⃣ Go live on your WhatsApp number 🚀\n\n` +
           `Any questions? Just reply here.\n\n` +
           `— *Hydra Tech Team* 🤖`,
           { business: { name: "Hydra Tech" }, whatsapp: { phone_number_id: pid } }
         );
+        console.log("✅ Welcome WhatsApp sent to client");
       }
-    } catch (e) { console.error("Welcome msg error:", e.message); }
+    } catch (e) { console.error("Welcome WhatsApp error:", e.message); }
 
+    // ── 11. Welcome SMS to new client ───────────────────────
+    // Reaches them even if WhatsApp is off — guaranteed delivery
+    try {
+      const { sendWelcomeSMS } = require("../services/smsService");
+      await sendWelcomeSMS(
+        data.personal_number,
+        data.owner_name,
+        data.biz_name
+      );
+      console.log("📱 Welcome SMS sent to client");
+    } catch (e) { console.error("Welcome SMS error:", e.message); }
+
+    // SMS welcome to new client
+    try {
+      const { sendWelcomeSMS } = require("../services/smsService");
+      await sendWelcomeSMS(data.personal_number, data.owner_name, data.biz_name);
+      console.log("📱 Welcome SMS sent to client");
+    } catch (e) { console.error("Welcome SMS error:", e.message); }
+
+    // SMS alert to you
+    try {
+      const { sendAlertSMS } = require("../services/smsService");
+      await sendAlertSMS(
+        process.env.MANAGER_PHONE,
+        `New client: ${data.biz_name} (${waNumber}) - ${data.plan} plan`
+      );
+    } catch (e) { console.error("Owner SMS error:", e.message); }
+
+    // ── 12. Send success response ───────────────────────────
     res.json({
       success:      true,
       message:      "Setup complete! We will contact you within 24 hours.",
@@ -167,11 +213,15 @@ router.post("/submit", async (req, res) => {
 
   } catch (err) {
     console.error("Onboard submit error:", err.message);
-    res.status(500).json({ success: false, message: "Something went wrong. Please try again." });
+    res.status(500).json({
+      success: false,
+      message: "Something went wrong. Please try again or contact us on WhatsApp.",
+    });
   }
 });
 
 // ── GET /onboard/check/:number ─────────────────────────────
+// Check if a number is already registered before submitting
 router.get("/check/:number", (req, res) => {
   const num    = formatPhone(req.params.number);
   const exists = fs.existsSync(path.join(CLIENTS_DIR, `${num}.json`));
@@ -179,12 +229,16 @@ router.get("/check/:number", (req, res) => {
 });
 
 // ── GET /onboard/clients ───────────────────────────────────
+// Returns all registered clients with stats
+// Protected by API key — only you can call this
 router.get("/clients", (req, res) => {
   if (req.query.apiKey !== process.env.BROADCAST_API_KEY) {
     return res.status(401).json({ success: false, message: "Unauthorized" });
   }
   try {
-    const files   = fs.readdirSync(CLIENTS_DIR).filter(f => f.endsWith(".json") && f !== "TEMPLATE.json");
+    const files = fs.readdirSync(CLIENTS_DIR)
+      .filter(f => f.endsWith(".json") && f !== "TEMPLATE.json");
+
     const clients = files.map(f => {
       try {
         const d = JSON.parse(fs.readFileSync(path.join(CLIENTS_DIR, f), "utf8"));
@@ -200,13 +254,15 @@ router.get("/clients", (req, res) => {
         };
       } catch (e) { return null; }
     }).filter(Boolean);
+
     res.json({ success: true, count: clients.length, clients });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
   }
 });
 
-// ── Helpers ────────────────────────────────────────────────
+// ── HELPERS ────────────────────────────────────────────────
+// Normalise Kenyan phone numbers to +254 format
 function formatPhone(phone) {
   let p = String(phone).replace(/\s+/g, "").replace(/[^0-9]/g, "");
   if (p.startsWith("0"))    p = "254" + p.slice(1);
@@ -214,10 +270,11 @@ function formatPhone(phone) {
   return `+${p}`;
 }
 
+// Convert 24hr time to 12hr AM/PM
 function formatTime(t) {
   if (!t) return t;
   const [h, m] = t.split(":").map(Number);
-  return `${h % 12 || 12}:${String(m).padStart(2,"0")} ${h >= 12 ? "PM" : "AM"}`;
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
 }
 
 module.exports = router;
